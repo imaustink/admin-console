@@ -1,2 +1,2 @@
-require = require("esm")(module);
-module.exports = require("./main.mjs");
+require = require('esm')(module);
+module.exports = require('./main.mjs');

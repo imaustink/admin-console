@@ -1,38 +1,67 @@
-# create-svelte
+# Admin Console
 
-Everything you need to build a Svelte project, powered by [`create-svelte`](https://github.com/sveltejs/kit/tree/master/packages/create-svelte).
+This app is intended to provide a physical console for basic network administration and diagnostic tasks.
 
-## Creating a project
+# Develop
 
-If you're seeing this, you've probably already done this step. Congrats!
-
-```bash
-# create a new project in the current directory
-npm create svelte@latest
-
-# create a new project in my-app
-npm create svelte@latest my-app
+Create a `.env` file in the root of the repo:
+```
+UNIFI_USERNAME=[USERNAME GOES HERE]
+UNIFI_PASSWORD=[PASSWORD GOES HERE]
+UNIFI_URL=https://192.168.1.1
 ```
 
-## Developing
+Start dev server:
 
-Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a development server:
+`npm run dev`
 
-```bash
-npm run dev
+Start electron app in dev mode:
 
-# or start the server and open the app in a new browser tab
-npm run dev -- --open
+`npm start`
+
+# Deployment
+
+Run `./deploy`
+
+This script assumes a target devise is available via the hostname `console` with the username `admin` and the default SSH key will be used.
+
+The app will be packaged for arm64 Linux by default. I used Debian Bullseye 64-bit on my Pi 3.
+
+# Launch on startup
+
+Use nano to open the following file path:
+
+`sudo nano /lib/systemd/system/admin-console.service`
+
+Paste this in and update the username and password:
+
+```
+[Unit]
+Description=Start Admin Console
+After=graphical.target
+
+[Service]
+Environment=DISPLAY=:0
+Environment=XAUTHORITY=/home/pi/.Xauthority
+Environment=UNIFI_USERNAME=[USERNAME GOES HERE]
+Environment=UNIFI_PASSWORD=[PASSWORD GOES HERE]
+Environment=UNIFI_URL=https://192.168.1.1
+ExecStart=/opt/admin-console/admin-console --no-sandbox
+Type=simple
+Restart=on-failure
+RestartSec=10s
+KillMode=process
+TimeoutSec=infinity
+User=admin
+
+[Install]
+WantedBy=graphical.target
 ```
 
-## Building
+Reload systemd:
 
-To create a production version of your app:
+`sudo systemctl daemon-reload`
 
-```bash
-npm run build
-```
+Enable our service:
 
-You can preview the production build with `npm run preview`.
-
-> To deploy your app, you may need to install an [adapter](https://kit.svelte.dev/docs/adapters) for your target environment.
+`sudo systemctl enable admin-console.service`

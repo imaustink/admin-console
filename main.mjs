@@ -1,22 +1,27 @@
 import * as electron from "electron";
 import path from "path";
 import url from "url";
-import * as inifiClient from "unifi-client"
+import * as unifiClient from "unifi-client"
+import dotenv from "dotenv";
 
-const { Controller } = inifiClient;
+const { app, BrowserWindow, ipcMain } = electron;
+
+if (!app.isPackaged) dotenv.config();
+
+const { UNIFI_USERNAME, UNIFI_PASSWORD, UNIFI_URL } = process.env;
+
+const { Controller } = unifiClient;
 
 // works with local account, check examples for 2FA
 const controller = new Controller({
-  username: "console",
-  password: "Z3Q0B0gMYGDsWmrwLi07tZ2CkokGhDe8EEChEGkdDZxQef4Ra2",
-  url: "https://unifi",
-  strictSSL: false
+	username: UNIFI_USERNAME,
+	password: UNIFI_PASSWORD,
+	url: UNIFI_URL,
+	strictSSL: false
 });
 
 const __filename = url.fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
-const { app, BrowserWindow, ipcMain } = electron;
 
 app.whenReady().then(() => {
   createWindow();
@@ -51,7 +56,7 @@ const createWindow = () => {
   if (app.isPackaged) {
     win.loadFile("ui/index.html");
   } else {
-    win.loadURL("http://127.0.0.1:5173");
+    win.loadURL("http://localhost:5173");
     win.webContents.openDevTools();
   }
 
@@ -60,10 +65,15 @@ const createWindow = () => {
   //   await win.webContents.send("stats", stats);
   // });
 
-  poll(async () => {
-    const devices = await getDevices("default");
-    await win.webContents.send("devices", devices);
-  }, app.isPackaged ? undefined : 1000);
+  controller.login().then(() => {
+    poll(
+      async () => {
+        const devices = await getDevices('default');
+        await win.webContents.send('devices', devices);
+      },
+      app.isPackaged ? undefined : 1000
+    );
+  }).catch(console.error);
 };
 
 function poll(handler, interval = 5000) {
@@ -82,21 +92,18 @@ function poll(handler, interval = 5000) {
 }
 
 async function getStats(site) {
-  await controller.login();
   const { data: { data } } = await controller.getInstance()
     .get(`/proxy/network/api/s/${site}/stat/health`);
   return data;
 }
 
 async function getDevices(site) {
-  await controller.login();
   const { data: { data } } = await controller.getInstance()
     .get(`/proxy/network/api/s/${site}/stat/device`);
   return data;
 }
 
 async function upgradeDevice(site, mac) {
-  await controller.login();
   const { data: { data } } = await controller.getInstance()
     .post(`/proxy/network/api/s/${site}/cmd/devmgr`, {
       cmd: "upgrade",
@@ -106,7 +113,6 @@ async function upgradeDevice(site, mac) {
 }
 
 async function rebootDevice(site, mac, type = "soft") {
-  await controller.login();
   const { data: { data } } = await controller.getInstance()
     .post(`/proxy/network/api/s/${site}/cmd/devmgr`, {
       cmd: "restart",

@@ -5,8 +5,8 @@ npm run build
 echo bundled UI
 npm run package
 echo packaged application
-scp "./dist/admin-console_${currentVersion}_arm64.deb" "austin@console:./Desktop/admin-console_${currentVersion}_arm64.deb"
+scp "./dist/admin-console_${currentVersion}_arm64.deb" "admin@console:./Desktop/admin-console_${currentVersion}_arm64.deb"
 echo transfered package to target
-ssh austin@raspberrypi "sudo apt install ./Desktop/admin-console_${currentVersion}_arm64.deb"
+ssh admin@console "sudo apt install ./Desktop/admin-console_${currentVersion}_arm64.deb"
 echo install complete, rebooting target
-ssh austin@console "sudo reboot now"
+ssh admin@console "sudo reboot now"
