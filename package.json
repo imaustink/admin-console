@@ -1,53 +1,56 @@
 {
-	"name": "admin-console",
-	"description": "An admin console to make it easier for myself and my wife to manage the various systems that run within our home",
-	"version": "0.0.1",
-	"author": {
-		"email": "austin@austinkurpuis.com",
-		"name": "Austin Kurpuis"
-	},
-	"dependencies": {
-		"dotenv": "^16.3.1",
-		"esm": "^3.2.25",
-		"unifi-client": "^0.9.4"
-	},
-	"devDependencies": {
-		"@playwright/test": "^1.28.1",
-		"@sveltejs/adapter-static": "^1.0.5",
-		"@sveltejs/kit": "^1.0.0",
-		"@typescript-eslint/eslint-plugin": "^5.45.0",
-		"@typescript-eslint/parser": "^5.45.0",
-		"electron": "^22.0.3",
-		"electron-builder": "^23.6.0",
-		"eslint": "^8.28.0",
-		"eslint-config-prettier": "^8.5.0",
-		"eslint-plugin-svelte3": "^4.0.0",
-		"prettier": "^2.8.0",
-		"prettier-plugin-svelte": "^2.8.1",
-		"svelte": "^3.54.0",
-		"svelte-check": "^3.0.1",
-		"tslib": "^2.4.1",
-		"typescript": "^4.9.3",
-		"vite": "^4.0.0",
-		"vitest": "^0.25.3"
-	},
-	"homepage": "https://github.com/imaustink/admin-console",
-	"main": "main.cjs",
-	"module": "main.mjs",
-	"private": true,
-	"scripts": {
-		"build": "vite build",
-		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
-		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
-		"dev": "vite dev",
-		"format": "prettier --plugin-search-dir . --write .",
-		"lint": "prettier --plugin-search-dir . --check . && eslint .",
-		"preview": "vite preview",
-		"start": "electron .",
-		"test": "playwright test",
-		"test:unit": "vitest",
-		"package": "electron-builder build --linux deb --arm64",
-		"deploy": "./deploy"
-	},
-	"type": "module"
+  "name": "homelab-dashboard",
+  "version": "1.0.0",
+  "description": "Unified dashboard for Kubernetes and Unifi management",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "npm run build && electron .",
+    "dev": "tsc && electron .",
+    "test-mode": "TEST_MODE=true npm start",
+    "build:rpi": "npm run build && electron-builder --linux --arm64",
+    "package:rpi": "./build-rpi.sh",
+    "deploy:rpi": "./deploy-rpi.sh"
+  },
+  "keywords": [
+    "kubernetes",
+    "unifi",
+    "dashboard",
+    "homelab"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.10.6",
+    "electron": "^28.1.0",
+    "electron-builder": "^24.9.1",
+    "typescript": "^5.3.3"
+  },
+  "dependencies": {
+    "@kubernetes/client-node": "^0.20.0",
+    "axios": "^1.6.5",
+    "winston": "^3.11.0"
+  },
+  "build": {
+    "appId": "com.homelab.dashboard",
+    "productName": "Homelab Dashboard",
+    "directories": {
+      "output": "build"
+    },
+    "files": [
+      "dist/**/*",
+      "index.html",
+      "styles.css",
+      "package.json"
+    ],
+    "linux": {
+      "target": [
+        {
+          "target": "dir",
+          "arch": ["arm64"]
+        }
+      ],
+      "category": "System"
+    }
+  }
 }

@@ -1,0 +1,35 @@
+[Unit]
+Description=Homelab Dashboard - UniFi and Kubernetes Management
+Documentation=https://github.com/yourusername/homelab-dashboard
+After=network.target
+
+[Service]
+Type=simple
+User=pi
+Group=pi
+WorkingDirectory=/opt/homelab-dashboard
+Environment="DISPLAY=:0"
+Environment="NODE_ENV=production"
+Environment="CONFIG_PATH=/etc/homelab-dashboard/config.json"
+
+# Path to the Electron executable
+ExecStart=/opt/homelab-dashboard/homelab-dashboard --no-sandbox
+
+# Restart policy
+Restart=always
+RestartSec=10
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+
+# Resource limits
+LimitNOFILE=65536
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=homelab-dashboard
+
+[Install]
+WantedBy=multi-user.target

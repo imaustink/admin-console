@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';">
+  <title>Homelab Dashboard</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Homelab Dashboard</h1>
+      <button id="exit-btn" class="btn btn-danger exit-btn">Exit</button>
+    </header>
+
+    <div class="tabs">
+      <button class="tab-button active" data-tab="unifi">UniFi Devices</button>
+      <button class="tab-button" data-tab="k8s">Kubernetes</button>
+      <button class="tab-button" data-tab="status">Status</button>
+    </div>
+
+    <main>
+      <!-- UniFi Tab -->
+      <div id="unifi" class="tab-content active">
+        <div class="tab-header">
+          <h2>UniFi Network Devices</h2>
+          <button id="refresh-unifi" class="btn btn-primary">Refresh</button>
+        </div>
+        <div id="unifi-devices" class="device-grid"></div>
+      </div>
+
+      <!-- Kubernetes Tab -->
+      <div id="k8s" class="tab-content">
+        <div class="tab-header">
+          <h2>Kubernetes Cluster Nodes</h2>
+          <button id="refresh-k8s" class="btn btn-primary">Refresh</button>
+        </div>
+        <div id="k8s-nodes" class="device-grid"></div>
+      </div>
+
+      <!-- Status Tab -->
+      <div id="status" class="tab-content">
+        <div class="tab-header">
+          <h2>System Status</h2>
+          <button id="refresh-status" class="btn btn-primary">Refresh</button>
+        </div>
+        <div id="status-info" class="status-grid"></div>
+      </div>
+    </main>
+  </div>
+
+  <script src="dist/renderer.js"></script>
+</body>
+</html>
