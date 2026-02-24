@@ -241,6 +241,12 @@ async function loadK8sNodes() {
                   ${!hasPoePort ? 'disabled title="Not on PoE switch - may use PoE injector"' : ''}>
             ⚡ Cycle Port
           </button>
+          <button class="btn btn-warning" onclick="rebootNode('${node.name}', ${node.schedulable})">
+            🔄 Reboot
+          </button>
+          <button class="btn btn-danger" onclick="shutdownNode('${node.name}', ${node.schedulable})">
+            ⏹️ Shutdown
+          </button>
         </div>
       </div>
     `;
@@ -293,6 +299,32 @@ async function powerCycleNodePort(nodeName: string) {
   try {
     await window.electronAPI.k8s.powerCycleNodePort(nodeName);
     alert(`Power cycle initiated for ${nodeName}'s PoE port`);
+    loadK8sNodes();
+  } catch (error) {
+    alert(`Error: ${(error as Error).message}`);
+  }
+}
+
+async function rebootNode(nodeName: string, schedulable: boolean) {
+  // Only show confirmation if node is schedulable (not cordoned)
+  if (schedulable && !confirm(`Are you sure you want to reboot node ${nodeName} via SSH?\n\nThe node is still schedulable. Consider draining and cordoning it first.`)) return;
+
+  try {
+    await window.electronAPI.k8s.rebootNode(nodeName);
+    alert(`Reboot command sent to ${nodeName}`);
+    loadK8sNodes();
+  } catch (error) {
+    alert(`Error: ${(error as Error).message}`);
+  }
+}
+
+async function shutdownNode(nodeName: string, schedulable: boolean) {
+  // Only show confirmation if node is schedulable (not cordoned)
+  if (schedulable && !confirm(`Are you sure you want to shutdown node ${nodeName} via SSH?\n\nThe node is still schedulable. Consider draining and cordoning it first.\n\nThis will power off the node completely.`)) return;
+
+  try {
+    await window.electronAPI.k8s.shutdownNode(nodeName);
+    alert(`Shutdown command sent to ${nodeName}`);
     loadK8sNodes();
   } catch (error) {
     alert(`Error: ${(error as Error).message}`);

@@ -17,6 +17,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     cordonNode: (nodeName: string) => ipcRenderer.invoke('k8s:cordonNode', nodeName),
     getNodePortMappings: () => ipcRenderer.invoke('k8s:getNodePortMappings'),
     powerCycleNodePort: (nodeName: string) => ipcRenderer.invoke('k8s:powerCycleNodePort', nodeName),
+    rebootNode: (nodeName: string) => ipcRenderer.invoke('k8s:rebootNode', nodeName),
+    shutdownNode: (nodeName: string) => ipcRenderer.invoke('k8s:shutdownNode', nodeName),
   },
   // Status API
   status: {

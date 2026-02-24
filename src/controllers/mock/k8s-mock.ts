@@ -156,4 +156,16 @@ export class K8sControllerMock {
       responseTime: 50,
     };
   }
+
+  async rebootNode(nodeName: string): Promise<void> {
+    logger.info(`[MOCK] Rebooting node ${nodeName} via SSH...`);
+    await new Promise(resolve => setTimeout(resolve, 500));
+    logger.info(`[MOCK] Successfully sent reboot command to node ${nodeName}`);
+  }
+
+  async shutdownNode(nodeName: string): Promise<void> {
+    logger.info(`[MOCK] Shutting down node ${nodeName} via SSH...`);
+    await new Promise(resolve => setTimeout(resolve, 500));
+    logger.info(`[MOCK] Successfully sent shutdown command to node ${nodeName}`);
+  }
 }

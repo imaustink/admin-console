@@ -1,13 +1,19 @@
 import * as k8s from '@kubernetes/client-node';
 import { K8sNode, K8sHealthCheckResult, K8sConfig } from '../types';
 import logger from '../utils/logger';
+import { exec } from 'child_process';
+import { promisify } from 'util';
+
+const execAsync = promisify(exec);
 
 export class K8sController {
   private kc: k8s.KubeConfig;
   private k8sApi: k8s.CoreV1Api;
   private appsApi: k8s.AppsV1Api;
+  private sshConfig?: K8sConfig['ssh'];
 
   constructor(config?: K8sConfig) {
+    this.sshConfig = config?.ssh;
     this.kc = new k8s.KubeConfig();
     
     if (config && config.cluster && config.token) {
@@ -402,5 +408,83 @@ export class K8sController {
       status: healthStatus,
       message,
     };
+  }
+
+  async rebootNode(nodeName: string): Promise<void> {
+    try {
+      logger.info(`Rebooting node ${nodeName} via SSH...`);
+      
+      // Get node IP
+      const nodes = await this.getNodes();
+      const node = nodes.find(n => n.name === nodeName);
+      
+      if (!node || !node.ip) {
+        throw new Error(`Node ${nodeName} not found or has no IP address`);
+      }
+
+      if (!this.sshConfig) {
+        throw new Error('SSH configuration not found in kubernetes config');
+      }
+
+      const sshPort = this.sshConfig.port || 22;
+      const sshUser = this.sshConfig.username;
+      
+      let sshCommand = '';
+      
+      if (this.sshConfig.privateKey) {
+        // Use key-based authentication
+        sshCommand = `ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p ${sshPort} -i "${this.sshConfig.privateKey}" ${sshUser}@${node.ip} "sudo reboot"`;
+      } else if (this.sshConfig.password) {
+        // Use password-based authentication with sshpass
+        sshCommand = `sshpass -p "${this.sshConfig.password}" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p ${sshPort} ${sshUser}@${node.ip} "sudo reboot"`;
+      } else {
+        throw new Error('No SSH authentication method configured (password or privateKey required)');
+      }
+
+      await execAsync(sshCommand);
+      logger.info(`Successfully sent reboot command to node ${nodeName}`);
+    } catch (error: any) {
+      logger.error(`Failed to reboot node ${nodeName}:`, error.message);
+      throw new Error(`Failed to reboot node: ${error.message}`);
+    }
+  }
+
+  async shutdownNode(nodeName: string): Promise<void> {
+    try {
+      logger.info(`Shutting down node ${nodeName} via SSH...`);
+      
+      // Get node IP
+      const nodes = await this.getNodes();
+      const node = nodes.find(n => n.name === nodeName);
+      
+      if (!node || !node.ip) {
+        throw new Error(`Node ${nodeName} not found or has no IP address`);
+      }
+
+      if (!this.sshConfig) {
+        throw new Error('SSH configuration not found in kubernetes config');
+      }
+
+      const sshPort = this.sshConfig.port || 22;
+      const sshUser = this.sshConfig.username;
+      
+      let sshCommand = '';
+      
+      if (this.sshConfig.privateKey) {
+        // Use key-based authentication
+        sshCommand = `ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p ${sshPort} -i "${this.sshConfig.privateKey}" ${sshUser}@${node.ip} "sudo shutdown -h now"`;
+      } else if (this.sshConfig.password) {
+        // Use password-based authentication with sshpass
+        sshCommand = `sshpass -p "${this.sshConfig.password}" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p ${sshPort} ${sshUser}@${node.ip} "sudo shutdown -h now"`;
+      } else {
+        throw new Error('No SSH authentication method configured (password or privateKey required)');
+      }
+
+      await execAsync(sshCommand);
+      logger.info(`Successfully sent shutdown command to node ${nodeName}`);
+    } catch (error: any) {
+      logger.error(`Failed to shutdown node ${nodeName}:`, error.message);
+      throw new Error(`Failed to shutdown node: ${error.message}`);
+    }
   }
 }

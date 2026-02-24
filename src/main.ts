@@ -371,6 +371,40 @@ ipcMain.handle('k8s:powerCycleNodePort', async (_, nodeName: string) => {
   }
 });
 
+ipcMain.handle('k8s:rebootNode', async (_, nodeName: string) => {
+  try {
+    logger.info('IPC: k8s:rebootNode called', { nodeName });
+    if (TEST_MODE) {
+      const { K8sControllerMock } = require('./controllers/mock/k8s-mock');
+      const controller = new K8sControllerMock();
+      return await controller.rebootNode(nodeName);
+    }
+    const { K8sController } = require('./controllers/k8s');
+    const controller = new K8sController(config.kubernetes);
+    return await controller.rebootNode(nodeName);
+  } catch (error) {
+    logger.error('IPC: k8s:rebootNode failed', error);
+    throw error;
+  }
+});
+
+ipcMain.handle('k8s:shutdownNode', async (_, nodeName: string) => {
+  try {
+    logger.info('IPC: k8s:shutdownNode called', { nodeName });
+    if (TEST_MODE) {
+      const { K8sControllerMock } = require('./controllers/mock/k8s-mock');
+      const controller = new K8sControllerMock();
+      return await controller.shutdownNode(nodeName);
+    }
+    const { K8sController } = require('./controllers/k8s');
+    const controller = new K8sController(config.kubernetes);
+    return await controller.shutdownNode(nodeName);
+  } catch (error) {
+    logger.error('IPC: k8s:shutdownNode failed', error);
+    throw error;
+  }
+});
+
 // IPC Handlers for Status
 ipcMain.handle('status:getSystemStatus', async () => {
   try {

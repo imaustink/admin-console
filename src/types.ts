@@ -28,6 +28,12 @@ export interface K8sConfig {
   token?: string;       // Service account token
   caData?: string;      // Base64-encoded CA certificate
   skipTLSVerify?: boolean; // Skip TLS verification (not recommended for production)
+  ssh?: {
+    username: string;   // SSH username for node access
+    password?: string;  // SSH password (if using password auth)
+    privateKey?: string; // Path to SSH private key (if using key auth)
+    port?: number;      // SSH port (default: 22)
+  };
 }
 
 export interface HealthCheckConfig {
@@ -142,6 +148,8 @@ export interface ElectronAPI {
     cordonNode: (nodeName: string) => Promise<any>;
     getNodePortMappings: () => Promise<NodePortMapping[]>;
     powerCycleNodePort: (nodeName: string) => Promise<any>;
+    rebootNode: (nodeName: string) => Promise<any>;
+    shutdownNode: (nodeName: string) => Promise<any>;
   };
   status: {
     getSystemStatus: () => Promise<SystemStatus>;

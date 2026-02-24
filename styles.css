@@ -456,6 +456,31 @@ main {
     padding: 15px 20px;
     margin-bottom: 15px;
   }
+
+}
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .device-grid, .status-grid {
+    grid-template-columns: 1fr;
+  }
   
   header h1 {
     font-size: 1.5rem;
@@ -491,5 +516,14 @@ main {
   .btn {
     padding: 8px 16px;
     font-size: 0.85rem;
+
+  }
+  
+  .tabs {
+    flex-direction: column;
+  }
+  
+  .device-actions, .node-actions {
+    flex-direction: column;
   }
 }
