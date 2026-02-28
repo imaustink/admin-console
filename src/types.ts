@@ -24,7 +24,7 @@ export interface InternetStats {
 
 export interface K8sConfig {
   // If not provided, will use default kubeconfig
-  cluster?: string;     // Kubernetes API server URL (e.g., https://192.168.1.100:6443)
+  cluster?: string | string[];     // Kubernetes API server URL(s) (e.g., https://192.168.1.100:6443) - supports multiple addresses for fallback
   token?: string;       // Service account token
   caData?: string;      // Base64-encoded CA certificate
   skipTLSVerify?: boolean; // Skip TLS verification (not recommended for production)

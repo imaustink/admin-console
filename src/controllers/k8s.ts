@@ -20,32 +20,59 @@ export class K8sController {
       // Use token-based authentication
       logger.info('Initializing K8s with token-based authentication');
       
-      const cluster: k8s.Cluster = {
-        name: 'custom-cluster',
-        server: config.cluster,
-        skipTLSVerify: config.skipTLSVerify || false,
-        caData: config.caData,
-      };
+      // Convert single cluster to array for unified handling
+      const clusterAddresses = Array.isArray(config.cluster) ? config.cluster : [config.cluster];
       
-      const user: k8s.User = {
-        name: 'service-account',
-        token: config.token,
-      };
+      // Try each cluster address until one succeeds
+      let connected = false;
+      let lastError: Error | null = null;
       
-      const context: k8s.Context = {
-        name: 'custom-context',
-        cluster: cluster.name,
-        user: user.name,
-      };
+      for (let i = 0; i < clusterAddresses.length; i++) {
+        const clusterUrl = clusterAddresses[i];
+        logger.info(`Attempting to connect to K8s cluster ${i + 1}/${clusterAddresses.length}: ${clusterUrl}`);
+        
+        try {
+          const cluster: k8s.Cluster = {
+            name: 'custom-cluster',
+            server: clusterUrl,
+            skipTLSVerify: config.skipTLSVerify || false,
+            caData: config.caData,
+          };
+          
+          const user: k8s.User = {
+            name: 'service-account',
+            token: config.token,
+          };
+          
+          const context: k8s.Context = {
+            name: 'custom-context',
+            cluster: cluster.name,
+            user: user.name,
+          };
+          
+          this.kc.loadFromOptions({
+            clusters: [cluster],
+            users: [user],
+            contexts: [context],
+            currentContext: context.name,
+          });
+          
+          logger.info(`Successfully configured K8s client for: ${clusterUrl}`);
+          connected = true;
+          break;
+        } catch (error: any) {
+          logger.warn(`Failed to configure K8s client for ${clusterUrl}: ${error.message}`);
+          lastError = error;
+          // Continue to next cluster address
+        }
+      }
       
-      this.kc.loadFromOptions({
-        clusters: [cluster],
-        users: [user],
-        contexts: [context],
-        currentContext: context.name,
-      });
-      
-      logger.info(`Connected to K8s cluster: ${config.cluster}`);
+      if (!connected) {
+        logger.error('Failed to connect to any K8s cluster address');
+        if (lastError) {
+          throw lastError;
+        }
+      }
     } else {
       // Use default kubeconfig
       logger.info('Initializing K8s with default kubeconfig');

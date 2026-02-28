@@ -7,7 +7,11 @@
     "site": "default"
   },
   "kubernetes": {
-    "cluster": "https://192.168.1.100:6443",
+    "cluster": [
+      "https://192.168.1.100:6443",
+      "https://192.168.1.101:6443",
+      "https://192.168.1.102:6443"
+    ],
     "token": "eyJhbGciOiJSUzI1NiIsImtpZCI6...",
     "caData": "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0t...",
     "skipTLSVerify": false,
