@@ -10,7 +10,12 @@
     "cluster": "https://192.168.1.100:6443",
     "token": "eyJhbGciOiJSUzI1NiIsImtpZCI6...",
     "caData": "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0t...",
-    "skipTLSVerify": false
+    "skipTLSVerify": false,
+    "ssh": {
+      "username": "ubuntu",
+      "password": "your-password",
+      "port": 22
+    }
   },
   "healthChecks": [
     {
