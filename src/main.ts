@@ -1,7 +1,31 @@
+ipcMain.handle('k8s:shutdownNodeSSH', async (_, nodeName: string, nodeIp: string) => {
+  try {
+    logger.info('IPC: k8s:shutdownNodeSSH called', { nodeName, nodeIp });
+    if (!nodeIp) throw new Error('Node IP is required for SSH shutdown');
+    const sshUser = (config.k8s && config.k8s.sshUser) || 'root';
+    const sshCmd = `ssh -o StrictHostKeyChecking=no ${sshUser}@${nodeIp} 'sudo shutdown -h now'`;
+    logger.info(`Executing SSH shutdown: ${sshCmd}`);
+    return new Promise((resolve, reject) => {
+      exec(sshCmd, (error, stdout, stderr) => {
+        if (error) {
+          logger.error('SSH shutdown failed', { error, stderr });
+          reject(new Error(stderr || error.message));
+        } else {
+          logger.info('SSH shutdown succeeded', { stdout });
+          resolve(stdout);
+        }
+      });
+    });
+  } catch (error) {
+    logger.error('IPC: k8s:shutdownNodeSSH failed', error);
+    throw error;
+  }
+});
 import { app, BrowserWindow, ipcMain, screen } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
 import { getLogger, closeLogger } from './utils/logger';
+import { exec } from 'child_process';
 
 // Check if running in test mode
 const TEST_MODE = process.env.TEST_MODE === 'true' || process.env.NODE_ENV === 'test';
@@ -339,6 +363,30 @@ ipcMain.handle('k8s:getNodePortMappings', async () => {
     return await controller.getNodePortMappings(nodes);
   } catch (error) {
     logger.error('IPC: k8s:getNodePortMappings failed', error);
+    throw error;
+  }
+});
+ipcMain.handle('k8s:rebootNodeSSH', async (_, nodeName: string, nodeIp: string) => {
+  try {
+    logger.info('IPC: k8s:rebootNodeSSH called', { nodeName, nodeIp });
+    if (!nodeIp) throw new Error('Node IP is required for SSH reboot');
+    // You may want to use config for SSH user, or default to 'root'
+    const sshUser = (config.k8s && config.k8s.sshUser) || 'root';
+    const sshCmd = `ssh -o StrictHostKeyChecking=no ${sshUser}@${nodeIp} 'sudo reboot'`;
+    logger.info(`Executing SSH reboot: ${sshCmd}`);
+    return new Promise((resolve, reject) => {
+      exec(sshCmd, (error, stdout, stderr) => {
+        if (error) {
+          logger.error('SSH reboot failed', { error, stderr });
+          reject(new Error(stderr || error.message));
+        } else {
+          logger.info('SSH reboot succeeded', { stdout });
+          resolve(stdout);
+        }
+      });
+    });
+  } catch (error) {
+    logger.error('IPC: k8s:rebootNodeSSH failed', error);
     throw error;
   }
 });

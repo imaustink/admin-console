@@ -180,7 +180,6 @@ async function loadK8sNodes() {
     container.innerHTML = nodes.map(node => {
       const mapping = portMappings.find(m => m.nodeName === node.name);
       const hasPoePort = mapping?.poeAvailable || false;
-      
       return `
       <div class="node-card">
         <div class="node-header">
@@ -238,7 +237,7 @@ async function loadK8sNodes() {
           }
           <button class="btn btn-danger" 
                   onclick="powerCycleNodePort('${node.name}')"
-                  ${!hasPoePort ? 'disabled title="Not on PoE switch - may use PoE injector"' : ''}>
+                  ${!hasPoePort ? 'disabled title=\"Not on PoE switch - may use PoE injector\"' : ''}>
             ⚡ Cycle Port
           </button>
           <button class="btn btn-warning" onclick="rebootNode('${node.name}', ${node.schedulable})">
