@@ -50,6 +50,59 @@
     </main>
   </div>
 
+  <!-- Command Prompt Modal -->
+  <div id="command-modal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Run SSH Command</h3>
+        <button class="modal-close" onclick="closeCommandModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <label for="modal-node-name">Node:</label>
+        <input type="text" id="modal-node-name" readonly>
+        
+        <label for="modal-command" style="margin-top: 8px;">Command:</label>
+        <textarea id="modal-command" placeholder="Enter command to run on node..."></textarea>
+        
+        <div id="modal-output" class="output-display" style="display: none;"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeCommandModal()">Close</button>
+        <button class="btn btn-primary" onclick="executeCommand()">Execute</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- APT Commands Modal -->
+  <div id="apt-modal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>APT Commands</h3>
+        <button class="modal-close" onclick="closeAptModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <label for="apt-node-name">Node:</label>
+        <input type="text" id="apt-node-name" readonly>
+        
+        <label for="apt-command" style="margin-top: 8px;">Select Command:</label>
+        <select id="apt-command">
+          <option value="update">Update (apt-get update)</option>
+          <option value="upgrade">Upgrade (apt-get upgrade -y)</option>
+          <option value="dist-upgrade">Dist-Upgrade (apt-get dist-upgrade -y)</option>
+          <option value="autoremove">Autoremove (apt-get autoremove -y)</option>
+          <option value="autoclean">Autoclean (apt-get autoclean)</option>
+          <option value="clean">Clean (apt-get clean)</option>
+        </select>
+        
+        <div id="apt-output" class="output-display" style="display: none;"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeAptModal()">Close</button>
+        <button class="btn btn-primary" onclick="executeAptCommand()">Execute</button>
+      </div>
+    </div>
+  </div>
+
   <script src="dist/renderer.js"></script>
 </body>
 </html>

@@ -514,4 +514,113 @@ export class K8sController {
       throw new Error(`Failed to shutdown node: ${error.message}`);
     }
   }
+
+  async runAptCommand(nodeName: string, command: string): Promise<string> {
+    try {
+      logger.info(`Running apt command "${command}" on node ${nodeName} via SSH...`);
+      
+      // Get node IP
+      const nodes = await this.getNodes();
+      const node = nodes.find(n => n.name === nodeName);
+      
+      if (!node || !node.ip) {
+        throw new Error(`Node ${nodeName} not found or has no IP address`);
+      }
+
+      if (!this.sshConfig) {
+        throw new Error('SSH configuration not found in kubernetes config');
+      }
+
+      const sshPort = this.sshConfig.port || 22;
+      const sshUser = this.sshConfig.username;
+      
+      // Validate command is an apt command
+      const validCommands = ['update', 'upgrade', 'dist-upgrade', 'autoremove', 'autoclean', 'clean'];
+      if (!validCommands.includes(command)) {
+        throw new Error(`Invalid apt command: ${command}. Must be one of: ${validCommands.join(', ')}`);
+      }
+
+      // Build the apt command with appropriate flags
+      let aptCommand = '';
+      if (command === 'update') {
+        aptCommand = 'sudo apt-get update';
+      } else if (command === 'upgrade') {
+        aptCommand = 'sudo DEBIAN_FRONTEND=noninteractive apt-get upgrade -y';
+      } else if (command === 'dist-upgrade') {
+        aptCommand = 'sudo DEBIAN_FRONTEND=noninteractive apt-get dist-upgrade -y';
+      } else if (command === 'autoremove') {
+        aptCommand = 'sudo DEBIAN_FRONTEND=noninteractive apt-get autoremove -y';
+      } else if (command === 'autoclean') {
+        aptCommand = 'sudo apt-get autoclean';
+      } else if (command === 'clean') {
+        aptCommand = 'sudo apt-get clean';
+      }
+      
+      let sshCommand = '';
+      
+      if (this.sshConfig.privateKey) {
+        // Use key-based authentication
+        sshCommand = `ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p ${sshPort} -i "${this.sshConfig.privateKey}" ${sshUser}@${node.ip} "${aptCommand}"`;
+      } else if (this.sshConfig.password) {
+        // Use password-based authentication with sshpass
+        sshCommand = `sshpass -p "${this.sshConfig.password}" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p ${sshPort} ${sshUser}@${node.ip} "${aptCommand}"`;
+      } else {
+        throw new Error('No SSH authentication method configured (password or privateKey required)');
+      }
+
+      const { stdout, stderr } = await execAsync(sshCommand);
+      const output = stdout || stderr || 'Command completed successfully';
+      logger.info(`Successfully executed apt ${command} on node ${nodeName}`);
+      return output;
+    } catch (error: any) {
+      logger.error(`Failed to run apt ${command} on node ${nodeName}:`, error.message);
+      throw new Error(`Failed to run apt command: ${error.message}`);
+    }
+  }
+
+  async runSSHCommand(nodeName: string, command: string): Promise<string> {
+    try {
+      logger.info(`Running SSH command on node ${nodeName}: ${command}`);
+      
+      // Get node IP
+      const nodes = await this.getNodes();
+      const node = nodes.find(n => n.name === nodeName);
+      
+      if (!node || !node.ip) {
+        throw new Error(`Node ${nodeName} not found or has no IP address`);
+      }
+
+      if (!this.sshConfig) {
+        throw new Error('SSH configuration not found in kubernetes config');
+      }
+
+      const sshPort = this.sshConfig.port || 22;
+      const sshUser = this.sshConfig.username;
+      
+      // Escape single quotes in the command for safety
+      const escapedCommand = command.replace(/'/g, "'\\''");
+      
+      let sshCommand = '';
+      
+      if (this.sshConfig.privateKey) {
+        // Use key-based authentication
+        sshCommand = `ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p ${sshPort} -i "${this.sshConfig.privateKey}" ${sshUser}@${node.ip} '${escapedCommand}'`;
+      } else if (this.sshConfig.password) {
+        // Use password-based authentication with sshpass
+        sshCommand = `sshpass -p "${this.sshConfig.password}" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p ${sshPort} ${sshUser}@${node.ip} '${escapedCommand}'`;
+      } else {
+        throw new Error('No SSH authentication method configured (password or privateKey required)');
+      }
+
+      const { stdout, stderr } = await execAsync(sshCommand, { maxBuffer: 1024 * 1024 }); // 1MB buffer for output
+      const output = stdout || stderr || 'Command completed with no output';
+      logger.info(`Successfully executed SSH command on node ${nodeName}`);
+      return output;
+    } catch (error: any) {
+      logger.error(`Failed to run SSH command on node ${nodeName}:`, error.message);
+      // Include stderr in error message if available
+      const errorOutput = error.stderr || error.stdout || error.message;
+      throw new Error(`Failed to run SSH command: ${errorOutput}`);
+    }
+  }
 }

@@ -430,6 +430,41 @@ ipcMain.handle('k8s:shutdownNode', async (_, nodeName: string) => {
   }
 });
 
+ipcMain.handle('k8s:runAptCommand', async (_, nodeName: string, command: string) => {
+  try {
+    logger.info('IPC: k8s:runAptCommand called', { nodeName, command });
+    if (TEST_MODE) {
+      const { K8sControllerMock } = require('./controllers/mock/k8s-mock');
+      const controller = new K8sControllerMock();
+      // Mock implementation
+      return `[MOCK] Successfully ran apt ${command} on node ${nodeName}`;
+    }
+    const { K8sController } = require('./controllers/k8s');
+    const controller = new K8sController(config.kubernetes);
+    return await controller.runAptCommand(nodeName, command);
+  } catch (error) {
+    logger.error('IPC: k8s:runAptCommand failed', error);
+    throw error;
+  }
+});
+
+ipcMain.handle('k8s:runSSHCommand', async (_, nodeName: string, command: string) => {
+  try {
+    logger.info('IPC: k8s:runSSHCommand called', { nodeName, command });
+    if (TEST_MODE) {
+      const { K8sControllerMock } = require('./controllers/mock/k8s-mock');
+      const controller = new K8sControllerMock();
+      return await controller.runSSHCommand(nodeName, command);
+    }
+    const { K8sController } = require('./controllers/k8s');
+    const controller = new K8sController(config.kubernetes);
+    return await controller.runSSHCommand(nodeName, command);
+  } catch (error) {
+    logger.error('IPC: k8s:runSSHCommand failed', error);
+    throw error;
+  }
+});
+
 // IPC Handlers for Status
 ipcMain.handle('status:getSystemStatus', async () => {
   try {

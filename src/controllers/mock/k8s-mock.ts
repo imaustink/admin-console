@@ -168,4 +168,20 @@ export class K8sControllerMock {
     await new Promise(resolve => setTimeout(resolve, 500));
     logger.info(`[MOCK] Successfully sent shutdown command to node ${nodeName}`);
   }
+
+  async runSSHCommand(nodeName: string, command: string): Promise<string> {
+    logger.info(`[MOCK] Running SSH command on node ${nodeName}: ${command}`);
+    await new Promise(resolve => setTimeout(resolve, 800));
+    
+    // Return mock output based on command content
+    const output = `[MOCK OUTPUT for ${nodeName}]
+Command: ${command}
+Result: Command executed successfully
+Sample output line 1
+Sample output line 2
+Sample output line 3`;
+    
+    logger.info(`[MOCK] Successfully executed SSH command on node ${nodeName}`);
+    return output;
+  }
 }

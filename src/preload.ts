@@ -19,6 +19,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     powerCycleNodePort: (nodeName: string) => ipcRenderer.invoke('k8s:powerCycleNodePort', nodeName),
     rebootNode: (nodeName: string) => ipcRenderer.invoke('k8s:rebootNode', nodeName),
     shutdownNode: (nodeName: string) => ipcRenderer.invoke('k8s:shutdownNode', nodeName),
+    runAptCommand: (nodeName: string, command: string) => ipcRenderer.invoke('k8s:runAptCommand', nodeName, command),
+    runSSHCommand: (nodeName: string, command: string) => ipcRenderer.invoke('k8s:runSSHCommand', nodeName, command),
   },
   // Status API
   status: {

@@ -150,6 +150,8 @@ export interface ElectronAPI {
     powerCycleNodePort: (nodeName: string) => Promise<any>;
     rebootNode: (nodeName: string) => Promise<any>;
     shutdownNode: (nodeName: string) => Promise<any>;
+    runAptCommand: (nodeName: string, command: string) => Promise<string>;
+    runSSHCommand: (nodeName: string, command: string) => Promise<string>;
   };
   status: {
     getSystemStatus: () => Promise<SystemStatus>;
