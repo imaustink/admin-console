@@ -484,12 +484,12 @@ ipcMain.handle('status:getSystemStatus', async () => {
 
       // Check for K8s resource health in test mode
       const k8sHealthChecks = [
-        { name: 'nginx-deployment', namespace: 'default', kind: 'Deployment' as const, interval: 30000, hidden: false },
-        { name: 'redis-statefulset', namespace: 'default', kind: 'StatefulSet' as const, interval: 30000, hidden: false }
+        { name: 'nginx-deployment', namespace: 'default', kind: 'Deployment' as const },
+        { name: 'redis-statefulset', namespace: 'default', kind: 'StatefulSet' as const }
       ];
 
       const resourceHealth = await Promise.all(
-        k8sHealthChecks.map(config => k8sController.checkResourceHealth(config))
+        k8sHealthChecks.map(config => k8sController.checkResourceHealth(config.kind, config.name, config.namespace))
       );
 
       // Mock HTTP health checks
@@ -515,7 +515,7 @@ ipcMain.handle('status:getSystemStatus', async () => {
           connected: true,
           nodeCount: nodes.length,
           readyNodes: nodes.filter((n: any) => n.status === 'Ready').length,
-          resourceHealth: resourceHealth.filter(h => !h.hidden)
+          resourceHealth: resourceHealth
         },
         healthChecks: mockHealthChecks
       };
@@ -546,9 +546,9 @@ ipcMain.handle('status:getSystemStatus', async () => {
       const k8sHealthChecks = config.k8sHealthChecks || [];
       const resourceHealth = await Promise.all(
         k8sHealthChecks.map((cfg: any) => 
-          k8sController.checkResourceHealth(cfg).catch(() => null)
+          k8sController.checkResourceHealth(cfg.kind, cfg.name, cfg.namespace).catch(() => null)
         )
-      ).then(results => results.filter(r => r !== null && !r.hidden));
+      ).then(results => results.filter(r => r !== null));
       
       // Get HTTP health checks
       const healthCheckConfigs = config.healthChecks || [];
