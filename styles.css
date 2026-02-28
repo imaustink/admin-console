@@ -527,3 +527,25 @@ main {
     flex-direction: column;
   }
 }
+
+/* Icon styles */
+.icon-bolt::before,
+.icon-refresh::before,
+.icon-power::before {
+  display: inline-block;
+  margin-right: 4px;
+  font-weight: bold;
+  font-size: 1em;
+}
+
+.icon-bolt::before {
+  content: '\26A1'; /* Lightning bolt */
+}
+
+.icon-refresh::before {
+  content: '\21BB'; /* Clockwise circular arrow */
+}
+
+.icon-power::before {
+  content: '\23FB'; /* Power symbol */
+}

@@ -238,13 +238,13 @@ async function loadK8sNodes() {
           <button class="btn btn-danger" 
                   onclick="powerCycleNodePort('${node.name}')"
                   ${!hasPoePort ? 'disabled title=\"Not on PoE switch - may use PoE injector\"' : ''}>
-            ⚡ Cycle Port
+            <span class="icon-bolt"></span> Cycle Port
           </button>
           <button class="btn btn-warning" onclick="rebootNode('${node.name}', ${node.schedulable})">
-            🔄 Reboot
+            <span class="icon-refresh"></span> Reboot
           </button>
           <button class="btn btn-danger" onclick="shutdownNode('${node.name}', ${node.schedulable})">
-            ⏹️ Shutdown
+            <span class="icon-power"></span> Shutdown
           </button>
         </div>
       </div>
