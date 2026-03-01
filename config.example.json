@@ -19,7 +19,19 @@
       "username": "ubuntu",
       "password": "your-password",
       "port": 22
-    }
+    },
+    "resourceFilters": [
+      {
+        "kind": "DaemonSet",
+        "name": "kube-proxy",
+        "namespace": "kube-system"
+      },
+      {
+        "kind": "Deployment",
+        "name": "internal-tool",
+        "namespace": "default"
+      }
+    ]
   },
   "healthChecks": [
     {
@@ -39,29 +51,6 @@
       "timeout": 3000,
       "interval": 30000,
       "hidden": false
-    }
-  ],
-  "k8sHealthChecks": [
-    {
-      "name": "nginx-deployment",
-      "namespace": "default",
-      "kind": "Deployment",
-      "interval": 30000,
-      "hidden": false
-    },
-    {
-      "name": "redis-statefulset",
-      "namespace": "default",
-      "kind": "StatefulSet",
-      "interval": 30000,
-      "hidden": false
-    },
-    {
-      "name": "monitoring-daemonset",
-      "namespace": "kube-system",
-      "kind": "DaemonSet",
-      "interval": 60000,
-      "hidden": true
     }
   ]
 }

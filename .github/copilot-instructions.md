@@ -2,6 +2,10 @@
 
 Keep an eye out for opportunities to update this file with helpful architectural documentation, coding patterns, and best practices for the project. This file should serve as a comprehensive guide for current and future contributors to understand the structure and conventions of the codebase.
 
+Be careful not to create extraneous readme files when making changes. Keep documentation concise and try to keep it in the main readme, only creating new readmes when you have a strong reason to create separate documentation.
+
+Make sure to add secret files to the .gitignore and never include sensitive information in the repository. Use environment variables or secure vaults for managing secrets.
+
 ## Project Architecture
 
 This is an Electron-based dashboard application for managing a homelab environment with UniFi network devices and Kubernetes clusters.

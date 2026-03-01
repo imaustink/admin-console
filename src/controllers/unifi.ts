@@ -2,12 +2,17 @@ import axios, { AxiosInstance } from 'axios';
 import https from 'https';
 import { UnifiDevice, InternetStats } from '../types';
 import logger from '../utils/logger';
+import fs from 'fs';
+import path from 'path';
+import crypto from 'crypto';
 
 export class UnifiController {
   private client: AxiosInstance;
   private siteName: string;
   private cookie: string | null = null;
   private isUnifiOS: boolean = false; // UDM Pro, UDR, etc.
+  private cacheDir: string;
+  private cacheFile: string;
 
   constructor(
     private host: string,
@@ -26,6 +31,14 @@ export class UnifiController {
     // Detect UniFi OS (UDM Pro uses port 443)
     this.isUnifiOS = port === 443;
     logger.info(`UniFi Controller mode: ${this.isUnifiOS ? 'UniFi OS (UDM/UDR)' : 'Traditional Controller'}`);
+    
+    // Setup cache directory and file
+    this.cacheDir = path.join(process.cwd(), 'cache');
+    const cacheKey = crypto.createHash('md5').update(`${host}:${port}:${username}`).digest('hex');
+    this.cacheFile = path.join(this.cacheDir, `unifi-${cacheKey}.json`);
+    
+    // Load cached cookie if available
+    this.loadCachedCookie();
   }
 
   private getApiPath(path: string): string {
@@ -34,6 +47,78 @@ export class UnifiController {
       return `/proxy/network${path}`;
     }
     return path;
+  }
+
+  private loadCachedCookie(): void {
+    try {
+      if (fs.existsSync(this.cacheFile)) {
+        const cacheData = JSON.parse(fs.readFileSync(this.cacheFile, 'utf-8'));
+        const now = Date.now();
+        
+        // Check if cache is still valid (within 24 hours)
+        if (cacheData.cookie && cacheData.timestamp && (now - cacheData.timestamp < 24 * 60 * 60 * 1000)) {
+          this.cookie = cacheData.cookie;
+          logger.info('Loaded cached UniFi cookie');
+        } else {
+          logger.info('Cached UniFi cookie expired');
+          this.clearCache();
+        }
+      }
+    } catch (error: any) {
+      logger.warn('Failed to load cached UniFi cookie:', error.message);
+      this.clearCache();
+    }
+  }
+
+  private saveCachedCookie(): void {
+    try {
+      // Ensure cache directory exists
+      if (!fs.existsSync(this.cacheDir)) {
+        fs.mkdirSync(this.cacheDir, { recursive: true });
+      }
+      
+      const cacheData = {
+        cookie: this.cookie,
+        timestamp: Date.now(),
+        host: this.host,
+        port: this.port,
+        username: this.username,
+      };
+      
+      fs.writeFileSync(this.cacheFile, JSON.stringify(cacheData, null, 2));
+      logger.info('Cached UniFi cookie saved');
+    } catch (error: any) {
+      logger.warn('Failed to save UniFi cookie cache:', error.message);
+    }
+  }
+
+  private clearCache(): void {
+    try {
+      if (fs.existsSync(this.cacheFile)) {
+        fs.unlinkSync(this.cacheFile);
+        logger.info('Cleared UniFi cookie cache');
+      }
+    } catch (error: any) {
+      logger.warn('Failed to clear UniFi cookie cache:', error.message);
+    }
+  }
+
+  private async validateCachedCookie(): Promise<boolean> {
+    if (!this.cookie) return false;
+    
+    try {
+      // Try a simple API call to validate the cookie
+      await this.client.get(this.getApiPath(`/api/s/${this.siteName}/self`), {
+        headers: { Cookie: this.cookie },
+      });
+      logger.info('Cached UniFi cookie is still valid');
+      return true;
+    } catch (error: any) {
+      logger.info('Cached UniFi cookie is invalid, will re-authenticate');
+      this.cookie = null;
+      this.clearCache();
+      return false;
+    }
   }
 
   async login(): Promise<void> {
@@ -52,6 +137,7 @@ export class UnifiController {
       const cookies = response.headers['set-cookie'];
       if (cookies && cookies.length > 0) {
         this.cookie = cookies.join(';');
+        this.saveCachedCookie();
         logger.info('Successfully logged in to Unifi Controller');
       } else {
         throw new Error('No cookies received from login');
@@ -67,6 +153,12 @@ export class UnifiController {
   private async ensureLoggedIn(): Promise<void> {
     if (!this.cookie) {
       await this.login();
+    } else {
+      // Validate cached cookie before using it
+      const isValid = await this.validateCachedCookie();
+      if (!isValid) {
+        await this.login();
+      }
     }
   }
 
@@ -126,13 +218,44 @@ export class UnifiController {
         throw new Error('WAN health data not found');
       }
 
+      // Check uptime_stats structure
+      const uptimeStats = wanHealth.uptime_stats || wanHealth.uptime;
+
+      // Note: rx_bytes-r is receive (download), tx_bytes-r is transmit (upload) - in BYTES per second
+      const downloadBytesPerSec = wanHealth['rx_bytes-r'] || 0;
+      const uploadBytesPerSec = wanHealth['tx_bytes-r'] || 0;
+      
+      // Convert bytes/sec to bits/sec
+      const downloadBitrate = downloadBytesPerSec * 8;
+      const uploadBitrate = uploadBytesPerSec * 8;
+      
+      // Get uptime - try different sources
+      let uptime = 0;
+      let availability = 0;
+      if (typeof uptimeStats === 'object' && uptimeStats !== null) {
+        // uptime_stats is an object with WAN/WAN2 keys
+        // Try to get the WAN uptime value
+        if (uptimeStats.WAN && uptimeStats.WAN.uptime) {
+          uptime = uptimeStats.WAN.uptime;
+          availability = uptimeStats.WAN.availability || 0;
+        } else {
+          uptime = uptimeStats.uptime || 0;
+        }
+      } else if (typeof uptimeStats === 'number') {
+        uptime = uptimeStats;
+      } else if (sysinfo && sysinfo.uptime) {
+        uptime = sysinfo.uptime;
+      }
+
       const stats: InternetStats = {
-        uptime: wanHealth.uptime || 0,
-        uptimePercentage: ((wanHealth.uptime || 0) / 86400) * 100, // Rough calculation
-        downloadSpeed: (wanHealth['xput-down'] || 0) / 1000000, // Convert to Mbps
-        uploadSpeed: (wanHealth['xput-up'] || 0) / 1000000, // Convert to Mbps
-        downloadBitrate: wanHealth['tx_bytes-r'] || 0, // Current download rate in bps
-        uploadBitrate: wanHealth['rx_bytes-r'] || 0, // Current upload rate in bps
+        uptime: uptime,
+        uptimePercentage: availability,
+        // Download/Upload Speed: Use current bitrate as a proxy since xput fields don't exist
+        // Convert from bits per second to Mbps
+        downloadSpeed: downloadBitrate / 1000000,
+        uploadSpeed: uploadBitrate / 1000000,
+        downloadBitrate: downloadBitrate, // Current download rate in bps
+        uploadBitrate: uploadBitrate, // Current upload rate in bps
         latency: wanHealth.latency || 0,
       };
 
@@ -335,6 +458,7 @@ export class UnifiController {
         headers: { Cookie: this.cookie },
       });
       this.cookie = null;
+      this.clearCache();
       logger.info('Successfully logged out from Unifi Controller');
     } catch (error: any) {
       logger.error('Failed to logout from Unifi Controller:', error.message);

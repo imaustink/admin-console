@@ -184,4 +184,125 @@ Sample output line 3`;
     logger.info(`[MOCK] Successfully executed SSH command on node ${nodeName}`);
     return output;
   }
+
+  async getAllDeployments(namespace?: string): Promise<K8sHealthCheckResult[]> {
+    logger.info(`[MOCK] Fetching all deployments${namespace ? ` in namespace ${namespace}` : ' across all namespaces'}...`);
+    await new Promise(resolve => setTimeout(resolve, 200));
+    
+    const deployments: K8sHealthCheckResult[] = [
+      {
+        kind: 'Deployment',
+        name: 'nginx-deployment',
+        namespace: 'default',
+        status: 'healthy',
+        message: '3/3 replicas ready',
+        replicas: { desired: 3, ready: 3, available: 3 },
+        responseTime: 45,
+      },
+      {
+        kind: 'Deployment',
+        name: 'api-server',
+        namespace: 'default',
+        status: 'healthy',
+        message: '2/2 replicas ready',
+        replicas: { desired: 2, ready: 2, available: 2 },
+        responseTime: 52,
+      },
+      {
+        kind: 'Deployment',
+        name: 'frontend',
+        namespace: 'production',
+        status: 'degraded',
+        message: '2/3 replicas ready',
+        replicas: { desired: 3, ready: 2, available: 2 },
+        responseTime: 58,
+      },
+    ];
+    
+    if (namespace) {
+      return deployments.filter(d => d.namespace === namespace);
+    }
+    
+    return deployments;
+  }
+
+  async getAllStatefulSets(namespace?: string): Promise<K8sHealthCheckResult[]> {
+    logger.info(`[MOCK] Fetching all statefulsets${namespace ? ` in namespace ${namespace}` : ' across all namespaces'}...`);
+    await new Promise(resolve => setTimeout(resolve, 200));
+    
+    const statefulsets: K8sHealthCheckResult[] = [
+      {
+        kind: 'StatefulSet',
+        name: 'redis-statefulset',
+        namespace: 'default',
+        status: 'healthy',
+        message: '1/1 replicas ready',
+        replicas: { desired: 1, ready: 1, available: 1 },
+        responseTime: 48,
+      },
+      {
+        kind: 'StatefulSet',
+        name: 'postgres',
+        namespace: 'database',
+        status: 'healthy',
+        message: '3/3 replicas ready',
+        replicas: { desired: 3, ready: 3, available: 3 },
+        responseTime: 62,
+      },
+    ];
+    
+    if (namespace) {
+      return statefulsets.filter(s => s.namespace === namespace);
+    }
+    
+    return statefulsets;
+  }
+
+  async getAllDaemonSets(namespace?: string): Promise<K8sHealthCheckResult[]> {
+    logger.info(`[MOCK] Fetching all daemonsets${namespace ? ` in namespace ${namespace}` : ' across all namespaces'}...`);
+    await new Promise(resolve => setTimeout(resolve, 200));
+    
+    const daemonsets: K8sHealthCheckResult[] = [
+      {
+        kind: 'DaemonSet',
+        name: 'kube-proxy',
+        namespace: 'kube-system',
+        status: 'healthy',
+        message: '5/5 pods ready',
+        replicas: { desired: 5, ready: 5, available: 5 },
+        responseTime: 38,
+      },
+      {
+        kind: 'DaemonSet',
+        name: 'node-exporter',
+        namespace: 'monitoring',
+        status: 'healthy',
+        message: '5/5 pods ready',
+        replicas: { desired: 5, ready: 5, available: 5 },
+        responseTime: 42,
+      },
+    ];
+    
+    if (namespace) {
+      return daemonsets.filter(d => d.namespace === namespace);
+    }
+    
+    return daemonsets;
+  }
+
+  async getAllK8sResources(namespace?: string): Promise<K8sHealthCheckResult[]> {
+    logger.info('[MOCK] Fetching all K8s resources...');
+    await new Promise(resolve => setTimeout(resolve, 300));
+    
+    const [deployments, statefulsets, daemonsets] = await Promise.all([
+      this.getAllDeployments(namespace),
+      this.getAllStatefulSets(namespace),
+      this.getAllDaemonSets(namespace),
+    ]);
+    
+    const allResources = [...deployments, ...statefulsets, ...daemonsets];
+    logger.info(`[MOCK] Found ${allResources.length} total K8s resources`);
+    
+    return allResources;
+  }
 }

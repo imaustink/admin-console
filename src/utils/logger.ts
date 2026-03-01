@@ -4,6 +4,7 @@ import * as fs from 'fs';
 
 let logger: winston.Logger | null = null;
 let logFilePath: string = '';
+let isClosed: boolean = false;
 
 export function getLogger(): winston.Logger & { getLogFile: () => string } {
   if (!logger) {
@@ -45,9 +46,14 @@ export function getLogger(): winston.Logger & { getLogFile: () => string } {
 
 export function closeLogger(): void {
   if (logger) {
+    isClosed = true;
     logger.end();
     logger = null;
   }
+}
+
+export function isLoggerClosed(): boolean {
+  return isClosed;
 }
 
 export default getLogger();

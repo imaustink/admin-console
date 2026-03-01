@@ -623,4 +623,129 @@ export class K8sController {
       throw new Error(`Failed to run SSH command: ${errorOutput}`);
     }
   }
+
+  async getAllDeployments(namespace?: string): Promise<K8sHealthCheckResult[]> {
+    try {
+      logger.info(`Fetching all deployments${namespace ? ` in namespace ${namespace}` : ' across all namespaces'}...`);
+      
+      const response = namespace 
+        ? await this.appsApi.listNamespacedDeployment(namespace)
+        : await this.appsApi.listDeploymentForAllNamespaces();
+      
+      const results = await Promise.all(
+        response.body.items.map(async (deployment) => {
+          const name = deployment.metadata?.name || 'unknown';
+          const ns = deployment.metadata?.namespace || 'default';
+          
+          try {
+            return await this.checkDeploymentHealth(name, ns);
+          } catch (error: any) {
+            return {
+              kind: 'Deployment',
+              name,
+              namespace: ns,
+              status: 'unknown' as const,
+              message: error.message,
+            };
+          }
+        })
+      );
+      
+      logger.info(`Found ${results.length} deployments`);
+      return results;
+    } catch (error: any) {
+      logger.error('Failed to get deployments:', error.message);
+      throw new Error(`Failed to get deployments: ${error.message}`);
+    }
+  }
+
+  async getAllStatefulSets(namespace?: string): Promise<K8sHealthCheckResult[]> {
+    try {
+      logger.info(`Fetching all statefulsets${namespace ? ` in namespace ${namespace}` : ' across all namespaces'}...`);
+      
+      const response = namespace
+        ? await this.appsApi.listNamespacedStatefulSet(namespace)
+        : await this.appsApi.listStatefulSetForAllNamespaces();
+      
+      const results = await Promise.all(
+        response.body.items.map(async (statefulset) => {
+          const name = statefulset.metadata?.name || 'unknown';
+          const ns = statefulset.metadata?.namespace || 'default';
+          
+          try {
+            return await this.checkStatefulSetHealth(name, ns);
+          } catch (error: any) {
+            return {
+              kind: 'StatefulSet',
+              name,
+              namespace: ns,
+              status: 'unknown' as const,
+              message: error.message,
+            };
+          }
+        })
+      );
+      
+      logger.info(`Found ${results.length} statefulsets`);
+      return results;
+    } catch (error: any) {
+      logger.error('Failed to get statefulsets:', error.message);
+      throw new Error(`Failed to get statefulsets: ${error.message}`);
+    }
+  }
+
+  async getAllDaemonSets(namespace?: string): Promise<K8sHealthCheckResult[]> {
+    try {
+      logger.info(`Fetching all daemonsets${namespace ? ` in namespace ${namespace}` : ' across all namespaces'}...`);
+      
+      const response = namespace
+        ? await this.appsApi.listNamespacedDaemonSet(namespace)
+        : await this.appsApi.listDaemonSetForAllNamespaces();
+      
+      const results = await Promise.all(
+        response.body.items.map(async (daemonset) => {
+          const name = daemonset.metadata?.name || 'unknown';
+          const ns = daemonset.metadata?.namespace || 'default';
+          
+          try {
+            return await this.checkDaemonSetHealth(name, ns);
+          } catch (error: any) {
+            return {
+              kind: 'DaemonSet',
+              name,
+              namespace: ns,
+              status: 'unknown' as const,
+              message: error.message,
+            };
+          }
+        })
+      );
+      
+      logger.info(`Found ${results.length} daemonsets`);
+      return results;
+    } catch (error: any) {
+      logger.error('Failed to get daemonsets:', error.message);
+      throw new Error(`Failed to get daemonsets: ${error.message}`);
+    }
+  }
+
+  async getAllK8sResources(namespace?: string): Promise<K8sHealthCheckResult[]> {
+    try {
+      logger.info('Fetching all K8s resources...');
+      
+      const [deployments, statefulsets, daemonsets] = await Promise.all([
+        this.getAllDeployments(namespace).catch(() => []),
+        this.getAllStatefulSets(namespace).catch(() => []),
+        this.getAllDaemonSets(namespace).catch(() => []),
+      ]);
+      
+      const allResources = [...deployments, ...statefulsets, ...daemonsets];
+      logger.info(`Found ${allResources.length} total K8s resources`);
+      
+      return allResources;
+    } catch (error: any) {
+      logger.error('Failed to get all K8s resources:', error.message);
+      throw new Error(`Failed to get all K8s resources: ${error.message}`);
+    }
+  }
 }

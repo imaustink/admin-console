@@ -396,19 +396,19 @@ async function loadSystemStatus() {
         </div>
         <div class="info-row">
           <span class="label">Download Speed:</span>
-          <span class="value">${(status.unifi.internet.downloadSpeed || 0).toFixed(1)} Mbps</span>
+          <span class="value">${(status.unifi.internet.downloadSpeed || 0).toFixed(2)} Mbps</span>
         </div>
         <div class="info-row">
           <span class="label">Upload Speed:</span>
-          <span class="value">${(status.unifi.internet.uploadSpeed || 0).toFixed(1)} Mbps</span>
+          <span class="value">${(status.unifi.internet.uploadSpeed || 0).toFixed(2)} Mbps</span>
         </div>
         <div class="info-row">
           <span class="label">Current Download:</span>
-          <span class="value">${((status.unifi.internet.downloadBitrate || 0) / 1000000).toFixed(1)} Mbps</span>
+          <span class="value">${((status.unifi.internet.downloadBitrate || 0) / 1000000).toFixed(2)} Mbps</span>
         </div>
         <div class="info-row">
           <span class="label">Current Upload:</span>
-          <span class="value">${((status.unifi.internet.uploadBitrate || 0) / 1000000).toFixed(1)} Mbps</span>
+          <span class="value">${((status.unifi.internet.uploadBitrate || 0) / 1000000).toFixed(2)} Mbps</span>
         </div>
         <div class="info-row">
           <span class="label">Latency:</span>

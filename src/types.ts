@@ -34,6 +34,13 @@ export interface K8sConfig {
     privateKey?: string; // Path to SSH private key (if using key auth)
     port?: number;      // SSH port (default: 22)
   };
+  resourceFilters?: K8sResourceFilter[]; // Optional filters to hide specific resources
+}
+
+export interface K8sResourceFilter {
+  kind: 'Deployment' | 'StatefulSet' | 'DaemonSet';
+  name: string;
+  namespace: string;
 }
 
 export interface HealthCheckConfig {

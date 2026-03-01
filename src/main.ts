@@ -1,7 +1,7 @@
 import { app, BrowserWindow, ipcMain, screen } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
-import { getLogger, closeLogger } from './utils/logger';
+import { getLogger, closeLogger, isLoggerClosed } from './utils/logger';
 import { exec } from 'child_process';
 
 // Check if running in test mode
@@ -26,12 +26,16 @@ try {
 
 // Log uncaught exceptions
 process.on('uncaughtException', (error) => {
-  logger.error('Uncaught Exception in Main Process', error);
+  if (!isLoggerClosed()) {
+    logger.error('Uncaught Exception in Main Process', error);
+  }
   console.error('Uncaught Exception:', error);
 });
 
 process.on('unhandledRejection', (reason, promise) => {
-  logger.error('Unhandled Promise Rejection in Main Process', { reason, promise });
+  if (!isLoggerClosed()) {
+    logger.error('Unhandled Promise Rejection in Main Process', { reason, promise });
+  }
   console.error('Unhandled Rejection:', reason);
 });
 
@@ -85,7 +89,9 @@ function createWindow(): void {
   });
 
   mainWindow.on('closed', () => {
-    logger.info('Window closed');
+    if (!isLoggerClosed()) {
+      logger.info('Window closed');
+    }
     mainWindow = null;
   });
 }
@@ -115,7 +121,9 @@ app.whenReady().then(() => {
 });
 
 app.on('window-all-closed', () => {
-  logger.info('All windows closed');
+  if (!isLoggerClosed()) {
+    logger.info('All windows closed');
+  }
   if (process.platform !== 'darwin') {
     closeLogger();
     app.quit();
@@ -123,8 +131,9 @@ app.on('window-all-closed', () => {
 });
 
 app.on('before-quit', () => {
-  logger.info('App quitting');
-  closeLogger();
+  if (!isLoggerClosed()) {
+    logger.info('App quitting');
+  }
 });
 
 // IPC Handlers for Unifi
@@ -482,15 +491,22 @@ ipcMain.handle('status:getSystemStatus', async () => {
         unifiController.getInternetStats()
       ]);
 
-      // Check for K8s resource health in test mode
-      const k8sHealthChecks = [
-        { name: 'nginx-deployment', namespace: 'default', kind: 'Deployment' as const },
-        { name: 'redis-statefulset', namespace: 'default', kind: 'StatefulSet' as const }
-      ];
-
-      const resourceHealth = await Promise.all(
-        k8sHealthChecks.map(config => k8sController.checkResourceHealth(config.kind, config.name, config.namespace))
-      );
+      // Get all K8s resources (auto-discovery)
+      const allResources = await k8sController.getAllK8sResources();
+      
+      // Apply filters if configured
+      const resourceFilters = config.kubernetes?.resourceFilters || [];
+      let resourceHealth = allResources;
+      
+      if (resourceFilters.length > 0) {
+        resourceHealth = allResources.filter((resource: any) => {
+          return !resourceFilters.some((filter: any) => 
+            filter.kind === resource.kind &&
+            filter.name === resource.name &&
+            filter.namespace === resource.namespace
+          );
+        });
+      }
 
       // Mock HTTP health checks
       const mockHealthChecks = [
@@ -542,13 +558,35 @@ ipcMain.handle('status:getSystemStatus', async () => {
         unifiController.getInternetStats().catch(() => null)
       ]);
       
-      // Get K8s resource health
-      const k8sHealthChecks = config.k8sHealthChecks || [];
-      const resourceHealth = await Promise.all(
-        k8sHealthChecks.map((cfg: any) => 
-          k8sController.checkResourceHealth(cfg.kind, cfg.name, cfg.namespace).catch(() => null)
-        )
-      ).then(results => results.filter(r => r !== null));
+      // Get K8s resource health - auto-discover all resources
+      let resourceHealth: any[] = [];
+      
+      try {
+        // Get all K8s resources (deployments, statefulsets, daemonsets)
+        const allResources = await k8sController.getAllK8sResources();
+        
+        // Apply filters if configured
+        const resourceFilters = config.kubernetes?.resourceFilters || [];
+        
+        if (resourceFilters.length > 0) {
+          // Filter out hidden resources
+          resourceHealth = allResources.filter((resource: any) => {
+            return !resourceFilters.some((filter: any) => 
+              filter.kind === resource.kind &&
+              filter.name === resource.name &&
+              filter.namespace === resource.namespace
+            );
+          });
+          logger.info(`Filtered ${allResources.length - resourceHealth.length} K8s resources based on config`);
+        } else {
+          resourceHealth = allResources;
+        }
+        
+        logger.info(`Displaying ${resourceHealth.length} K8s resources on status page`);
+      } catch (error: any) {
+        logger.warn('Failed to get K8s resources for status page:', error.message);
+        resourceHealth = [];
+      }
       
       // Get HTTP health checks
       const healthCheckConfigs = config.healthChecks || [];
