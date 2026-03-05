@@ -73,6 +73,30 @@ try {
   console.error(`❌ Failed to load config.json. Please ensure it exists at: ${path.join(userDataPath, 'config.json')}`);
 }
 
+// Singleton controller instances — created once so cookies/sessions are reused across IPC calls
+let unifiController: any = null;
+function getUnifiController() {
+  if (!unifiController) {
+    const unifiConfig = config.unifi || {};
+    if (TEST_MODE) {
+      const { UnifiControllerMock } = require('./controllers/mock/unifi-mock');
+      unifiController = new UnifiControllerMock('mock-host', 8443, 'admin', 'mock-password', 'default');
+    } else {
+      const { UnifiController } = require('./controllers/unifi');
+      const cacheDir = path.join(app.getPath('userData'), 'cache');
+      unifiController = new UnifiController(
+        unifiConfig.host,
+        unifiConfig.port,
+        unifiConfig.username,
+        unifiConfig.password,
+        unifiConfig.site,
+        cacheDir
+      );
+    }
+  }
+  return unifiController;
+}
+
 // Log uncaught exceptions
 process.on('uncaughtException', (error) => {
   if (!isLoggerClosed()) {
@@ -275,21 +299,7 @@ ipcMain.handle('update:getVersion', async () => {
 ipcMain.handle('unifi:getDevices', async () => {
   try {
     logger.info('IPC: unifi:getDevices called');
-    if (TEST_MODE) {
-      const { UnifiControllerMock } = require('./controllers/mock/unifi-mock');
-      const controller = new UnifiControllerMock('mock-host', 8443, 'admin', 'mock-password', 'default');
-      return await controller.getDevices();
-    }
-    const { UnifiController } = require('./controllers/unifi');
-    const unifiConfig = config.unifi || {};
-    const controller = new UnifiController(
-      unifiConfig.host,
-      unifiConfig.port,
-      unifiConfig.username,
-      unifiConfig.password,
-      unifiConfig.site
-    );
-    return await controller.getDevices();
+    return await getUnifiController().getDevices();
   } catch (error) {
     logger.error('IPC: unifi:getDevices failed', error);
     throw error;
@@ -299,21 +309,7 @@ ipcMain.handle('unifi:getDevices', async () => {
 ipcMain.handle('unifi:updateFirmware', async (_, deviceId: string) => {
   try {
     logger.info('IPC: unifi:updateFirmware called', { deviceId });
-    if (TEST_MODE) {
-      const { UnifiControllerMock } = require('./controllers/mock/unifi-mock');
-      const controller = new UnifiControllerMock('mock-host', 8443, 'admin', 'mock-password', 'default');
-      return await controller.updateFirmware(deviceId);
-    }
-    const { UnifiController } = require('./controllers/unifi');
-    const unifiConfig = config.unifi || {};
-    const controller = new UnifiController(
-      unifiConfig.host,
-      unifiConfig.port,
-      unifiConfig.username,
-      unifiConfig.password,
-      unifiConfig.site
-    );
-    return await controller.updateFirmware(deviceId);
+    return await getUnifiController().updateFirmware(deviceId);
   } catch (error) {
     logger.error('IPC: unifi:updateFirmware failed', error);
     throw error;
@@ -323,21 +319,7 @@ ipcMain.handle('unifi:updateFirmware', async (_, deviceId: string) => {
 ipcMain.handle('unifi:powerCycle', async (_, deviceId: string) => {
   try {
     logger.info('IPC: unifi:powerCycle called', { deviceId });
-    if (TEST_MODE) {
-      const { UnifiControllerMock } = require('./controllers/mock/unifi-mock');
-      const controller = new UnifiControllerMock('mock-host', 8443, 'admin', 'mock-password', 'default');
-      return await controller.powerCycle(deviceId);
-    }
-    const { UnifiController } = require('./controllers/unifi');
-    const unifiConfig = config.unifi || {};
-    const controller = new UnifiController(
-      unifiConfig.host,
-      unifiConfig.port,
-      unifiConfig.username,
-      unifiConfig.password,
-      unifiConfig.site
-    );
-    return await controller.powerCycle(deviceId);
+    return await getUnifiController().powerCycle(deviceId);
   } catch (error) {
     logger.error('IPC: unifi:powerCycle failed', error);
     throw error;
@@ -347,21 +329,7 @@ ipcMain.handle('unifi:powerCycle', async (_, deviceId: string) => {
 ipcMain.handle('unifi:getInternetStats', async () => {
   try {
     logger.info('IPC: unifi:getInternetStats called');
-    if (TEST_MODE) {
-      const { UnifiControllerMock } = require('./controllers/mock/unifi-mock');
-      const controller = new UnifiControllerMock('mock-host', 8443, 'admin', 'mock-password', 'default');
-      return await controller.getInternetStats();
-    }
-    const { UnifiController } = require('./controllers/unifi');
-    const unifiConfig = config.unifi || {};
-    const controller = new UnifiController(
-      unifiConfig.host,
-      unifiConfig.port,
-      unifiConfig.username,
-      unifiConfig.password,
-      unifiConfig.site
-    );
-    return await controller.getInternetStats();
+    return await getUnifiController().getInternetStats();
   } catch (error) {
     logger.error('IPC: unifi:getInternetStats failed', error);
     throw error;
@@ -458,29 +426,18 @@ ipcMain.handle('k8s:getNodePortMappings', async () => {
   try {
     logger.info('IPC: k8s:getNodePortMappings called');
     if (TEST_MODE) {
-      const { UnifiControllerMock } = require('./controllers/mock/unifi-mock');
       const { K8sControllerMock } = require('./controllers/mock/k8s-mock');
       const { PortMapperControllerMock } = require('./controllers/mock/port-mapper-mock');
-      const unifiController = new UnifiControllerMock('mock-host', 8443, 'admin', 'mock-password', 'default');
       const k8sController = new K8sControllerMock();
       const nodes = await k8sController.getNodes();
-      const controller = new PortMapperControllerMock(unifiController);
+      const controller = new PortMapperControllerMock(getUnifiController());
       return await controller.getNodePortMappings(nodes);
     }
     const { PortMapperController } = require('./controllers/port-mapper');
     const { K8sController } = require('./controllers/k8s');
-    const unifiConfig = config.unifi || {};
-    const { UnifiController } = require('./controllers/unifi');
-    const unifiController = new UnifiController(
-      unifiConfig.host,
-      unifiConfig.port,
-      unifiConfig.username,
-      unifiConfig.password,
-      unifiConfig.site
-    );
     const k8sController = new K8sController(config.kubernetes);
     const nodes = await k8sController.getNodes();
-    const controller = new PortMapperController(unifiController);
+    const controller = new PortMapperController(getUnifiController());
     return await controller.getNodePortMappings(nodes);
   } catch (error) {
     logger.error('IPC: k8s:getNodePortMappings failed', error);
@@ -516,23 +473,12 @@ ipcMain.handle('k8s:powerCycleNodePort', async (_, nodeName: string) => {
   try {
     logger.info('IPC: k8s:powerCycleNodePort called', { nodeName });
     if (TEST_MODE) {
-      const { UnifiControllerMock } = require('./controllers/mock/unifi-mock');
       const { PortMapperControllerMock } = require('./controllers/mock/port-mapper-mock');
-      const unifiController = new UnifiControllerMock('mock-host', 8443, 'admin', 'mock-password', 'default');
-      const controller = new PortMapperControllerMock(unifiController);
+      const controller = new PortMapperControllerMock(getUnifiController());
       return await controller.powerCycleNodePort(nodeName);
     }
     const { PortMapperController } = require('./controllers/port-mapper');
-    const unifiConfig = config.unifi || {};
-    const { UnifiController } = require('./controllers/unifi');
-    const unifiController = new UnifiController(
-      unifiConfig.host,
-      unifiConfig.port,
-      unifiConfig.username,
-      unifiConfig.password,
-      unifiConfig.site
-    );
-    const controller = new PortMapperController(unifiController);
+    const controller = new PortMapperController(getUnifiController());
     return await controller.powerCycleNodePort(nodeName);
   } catch (error) {
     logger.error('IPC: k8s:powerCycleNodePort failed', error);
@@ -614,10 +560,9 @@ ipcMain.handle('status:getSystemStatus', async () => {
   try {
     logger.info('IPC: status:getSystemStatus called');
     if (TEST_MODE) {
-      const { UnifiControllerMock } = require('./controllers/mock/unifi-mock');
       const { K8sControllerMock } = require('./controllers/mock/k8s-mock');
       
-      const unifiController = new UnifiControllerMock('mock-host', 8443, 'admin', 'mock-password', 'default');
+      const unifiController = getUnifiController();
       const k8sController = new K8sControllerMock();
       
       const [devices, nodes, internetStats] = await Promise.all([
@@ -672,18 +617,9 @@ ipcMain.handle('status:getSystemStatus', async () => {
       };
     }
     const { StatusController } = require('./controllers/status');
-    const { UnifiController } = require('./controllers/unifi');
     const { K8sController } = require('./controllers/k8s');
     
-    const unifiConfig = config.unifi || {};
-    const unifiController = new UnifiController(
-      unifiConfig.host,
-      unifiConfig.port,
-      unifiConfig.username,
-      unifiConfig.password,
-      unifiConfig.site
-    );
-    
+    const unifiController = getUnifiController();
     const k8sController = new K8sController(config.kubernetes);
     
     try {

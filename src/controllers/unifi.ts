@@ -19,7 +19,8 @@ export class UnifiController {
     private port: number,
     private username: string,
     private password: string,
-    site: string = 'default'
+    site: string = 'default',
+    cacheDir?: string
   ) {
     this.siteName = site;
     this.client = axios.create({
@@ -32,8 +33,8 @@ export class UnifiController {
     this.isUnifiOS = port === 443;
     logger.info(`UniFi Controller mode: ${this.isUnifiOS ? 'UniFi OS (UDM/UDR)' : 'Traditional Controller'}`);
     
-    // Setup cache directory and file
-    this.cacheDir = path.join(process.cwd(), 'cache');
+    // Setup cache directory and file (prefer provided cacheDir, fall back to cwd/cache)
+    this.cacheDir = cacheDir || path.join(process.cwd(), 'cache');
     const cacheKey = crypto.createHash('md5').update(`${host}:${port}:${username}`).digest('hex');
     this.cacheFile = path.join(this.cacheDir, `unifi-${cacheKey}.json`);
     
