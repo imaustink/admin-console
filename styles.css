@@ -40,7 +40,7 @@ header {
   background: rgba(15, 23, 42, 0.8);
   padding: 5px 10px;
   border-radius: 8px;
-  border: 1px solid rgba(56, 189, 248, 0.15);
+  border: 1px solid rgba(107, 158, 196, 0.15);
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);
   margin-bottom: 5px;
   display: flex;
@@ -49,7 +49,7 @@ header {
 }
 
 header h1 {
-  color: #38bdf8;
+  color: #6b9ec4;
   font-size: 0.95rem;
   font-weight: 700;
   letter-spacing: -0.02em;
@@ -78,22 +78,22 @@ header h1 {
   font-weight: 600;
   cursor: pointer;
   color: #64748b;
-  border: 1px solid rgba(56, 189, 248, 0.15);
+  border: 1px solid rgba(107, 158, 196, 0.15);
   touch-action: manipulation;
-  -webkit-tap-highlight-color: rgba(56, 189, 248, 0.2);
+  -webkit-tap-highlight-color: rgba(107, 158, 196, 0.2);
 }
 
 .tab-button:hover {
-  border-color: #38bdf8;
+  border-color: #6b9ec4;
   color: #e2e8f0;
   background: rgba(30, 41, 59, 0.9);
 }
 
 .tab-button.active {
-  background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
+  background: linear-gradient(135deg, #3a7a9e 0%, #255f7a 100%);
   color: white;
-  border-color: #0ea5e9;
-  box-shadow: 0 2px 8px rgba(14, 165, 233, 0.4);
+  border-color: #3a7a9e;
+  box-shadow: 0 2px 8px rgba(58, 122, 158, 0.4);
 }
 
 /* Main Content */
@@ -101,7 +101,7 @@ main {
   background: rgba(15, 23, 42, 0.8);
   padding: 6px;
   border-radius: 8px;
-  border: 1px solid rgba(56, 189, 248, 0.15);
+  border: 1px solid rgba(107, 158, 196, 0.15);
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);
   min-height: auto;
   /* Performance optimization */
@@ -145,7 +145,7 @@ main {
   letter-spacing: 0.03em;
   text-transform: uppercase;
   touch-action: manipulation;
-  -webkit-tap-highlight-color: rgba(56, 189, 248, 0.2);
+  -webkit-tap-highlight-color: rgba(107, 158, 196, 0.2);
   position: relative;
   background: transparent;
 }
@@ -165,13 +165,13 @@ main {
 }
 
 .btn-primary {
-  color: #06b6d4;
-  border-color: #06b6d4;
+  color: #4a8db5;
+  border-color: #4a8db5;
 }
 
 .btn-primary:hover:not(:disabled) {
   background: rgba(6, 182, 212, 0.15);
-  border-color: #22d3ee;
+  border-color: #6aabcc;
 }
 
 .btn-danger {
@@ -245,7 +245,7 @@ main {
 .device-card, .node-card, .status-card {
   position: relative;
   background: rgba(10, 15, 30, 0.9);
-  border: 1px solid rgba(56, 189, 248, 0.15);
+  border: 1px solid rgba(107, 158, 196, 0.15);
   border-radius: 8px;
   padding: 5px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
@@ -262,8 +262,8 @@ main {
 }
 
 .device-card:hover, .node-card:hover {
-  border-color: rgba(56, 189, 248, 0.6);
-  box-shadow: 0 4px 16px rgba(56, 189, 248, 0.15), 0 2px 8px rgba(0, 0, 0, 0.5);
+  border-color: rgba(107, 158, 196, 0.6);
+  box-shadow: 0 4px 16px rgba(107, 158, 196, 0.15), 0 2px 8px rgba(0, 0, 0, 0.5);
 }
 
 .device-header, .node-header {
@@ -437,16 +437,16 @@ main {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(14, 165, 233, 0.5);
+  background: rgba(58, 122, 158, 0.5);
   border: 2px solid rgba(15, 23, 42, 0.5);
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(14, 165, 233, 0.7);
+  background: rgba(58, 122, 158, 0.7);
 }
 
 ::-webkit-scrollbar-thumb:active {
-  background: #0ea5e9;
+  background: #3a7a9e;
 }
 
 /* Responsive */
@@ -637,8 +637,8 @@ main {
   padding: 5px 10px;
   font-size: 0.65rem;
   background: transparent;
-  color: #06b6d4;
-  border: 1px solid #06b6d4;
+  color: #4a8db5;
+  border: 1px solid #4a8db5;
   border-radius: 4px;
   cursor: pointer;
   display: flex;
@@ -648,12 +648,12 @@ main {
   text-transform: uppercase;
   letter-spacing: 0.03em;
   touch-action: manipulation;
-  -webkit-tap-highlight-color: rgba(56, 189, 248, 0.2);
+  -webkit-tap-highlight-color: rgba(107, 158, 196, 0.2);
 }
 
 .dropdown-toggle:hover {
   background: rgba(6, 182, 212, 0.15);
-  border-color: #22d3ee;
+  border-color: #6aabcc;
 }
 
 .dropdown-toggle::after {
@@ -669,7 +669,7 @@ main {
   left: 0;
   right: 0;
   background: rgba(10, 15, 30, 0.98);
-  border: 1px solid rgba(56, 189, 248, 0.2);
+  border: 1px solid rgba(107, 158, 196, 0.2);
   border-radius: 6px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
   margin-top: 2px;
@@ -694,7 +694,7 @@ main {
   text-align: left;
   color: #e2e8f0;
   touch-action: manipulation;
-  -webkit-tap-highlight-color: rgba(56, 189, 248, 0.1);
+  -webkit-tap-highlight-color: rgba(107, 158, 196, 0.1);
 }
 
 .dropdown-item:last-child {
@@ -702,7 +702,7 @@ main {
 }
 
 .dropdown-item:hover {
-  background: rgba(56, 189, 248, 0.1);
+  background: rgba(107, 158, 196, 0.1);
 }
 
 .dropdown-item:disabled {
@@ -728,7 +728,7 @@ main {
 }
 
 .dropdown-item.info {
-  color: #38bdf8;
+  color: #6b9ec4;
 }
 
 /* Modal */
@@ -751,7 +751,7 @@ main {
 
 .modal-content {
   background: rgba(15, 23, 42, 0.95);
-  border: 1px solid rgba(56, 189, 248, 0.2);
+  border: 1px solid rgba(107, 158, 196, 0.2);
   border-radius: 8px;
   padding: 15px;
   max-width: 500px;
@@ -767,7 +767,7 @@ main {
   align-items: center;
   margin-bottom: 12px;
   padding-bottom: 8px;
-  border-bottom: 1px solid rgba(56, 189, 248, 0.2);
+  border-bottom: 1px solid rgba(107, 158, 196, 0.2);
 }
 
 .modal-header h3 {
@@ -792,8 +792,8 @@ main {
 }
 
 .modal-close:hover {
-  background: rgba(56, 189, 248, 0.1);
-  color: #38bdf8;
+  background: rgba(107, 158, 196, 0.1);
+  color: #6b9ec4;
 }
 
 .modal-body {
@@ -816,7 +816,7 @@ main {
   font-size: 0.7rem;
   background: rgba(10, 15, 30, 0.8);
   color: #e2e8f0;
-  border: 1px solid rgba(56, 189, 248, 0.2);
+  border: 1px solid rgba(107, 158, 196, 0.2);
   border-radius: 4px;
   font-family: 'Courier New', monospace;
   resize: vertical;
@@ -834,8 +834,8 @@ main {
 .modal-body textarea:focus,
 .modal-body select:focus {
   outline: none;
-  border-color: #38bdf8;
-  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2);
+  border-color: #6b9ec4;
+  box-shadow: 0 0 0 2px rgba(107, 158, 196, 0.2);
 }
 
 .modal-footer {
@@ -843,7 +843,7 @@ main {
   gap: 6px;
   justify-content: flex-end;
   padding-top: 8px;
-  border-top: 1px solid rgba(56, 189, 248, 0.2);
+  border-top: 1px solid rgba(107, 158, 196, 0.2);
 }
 
 .modal-footer .btn {
@@ -854,7 +854,7 @@ main {
 .output-display {
   background: rgba(10, 15, 30, 0.9);
   color: #34d399;
-  border: 1px solid rgba(56, 189, 248, 0.2);
+  border: 1px solid rgba(107, 158, 196, 0.2);
   padding: 8px;
   border-radius: 4px;
   font-family: 'Courier New', monospace;
@@ -870,7 +870,7 @@ main {
   width: 100%;
   height: 8px;
   background: rgba(10, 15, 30, 0.9);
-  border: 1px solid rgba(56, 189, 248, 0.2);
+  border: 1px solid rgba(107, 158, 196, 0.2);
   border-radius: 4px;
   overflow: hidden;
   margin: 10px 0;
@@ -878,7 +878,7 @@ main {
 
 .progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, #38bdf8, #0ea5e9);
+  background: linear-gradient(90deg, #6b9ec4, #3a7a9e);
   transition: width 0.3s ease;
   width: 0%;
 }
