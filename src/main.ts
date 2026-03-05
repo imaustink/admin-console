@@ -23,8 +23,8 @@ const isPackaged = app.isPackaged;
 // This disables signature verification (not recommended for public distribution)
 if (process.platform === 'darwin') {
   process.env.ELECTRON_UPDATER_ALLOW_DOWNGRADE = 'true';
-  // Disable signature verification for personal use
-  (autoUpdater as any).disableWebInstaller = false;
+  // Disable code signature verification for unsigned personal builds
+  (autoUpdater as any).verifyUpdateCodeSignature = false;
   Object.defineProperty(app, 'isPackaged', {
     get() {
       return true;
@@ -195,6 +195,11 @@ app.whenReady().then(() => {
         logger.error('Auto-update check failed', err);
       });
     }, 3000); // Check after 3 seconds to let app load first
+    setInterval(() => {
+      autoUpdater.checkForUpdates().catch(err => {
+        logger.error('Auto-update periodic check failed', err);
+      });
+    }, 1 * 60 * 1000); // Check every 5 minutes
   } else {
     logger.info('Skipping auto-updater (development mode)');
   }
