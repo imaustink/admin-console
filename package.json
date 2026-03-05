@@ -1,6 +1,6 @@
 {
   "name": "homelab-dashboard",
-  "version": "2.0.6",
+  "version": "2.0.7",
   "description": "Unified dashboard for Kubernetes and Unifi management",
   "main": "dist/main.js",
   "scripts": {
