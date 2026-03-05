@@ -427,9 +427,12 @@ async function loadSystemStatus() {
           <span class="label">Ready Nodes:</span>
           <span class="value">${status.k8s.readyNodes || 0}</span>
         </div>
-        ${status.k8s.resourceHealth && status.k8s.resourceHealth.length > 0 ? `
+        ${status.k8s.resourceHealth && status.k8s.resourceHealth.length > 0 ? (() => {
+          const unhealthyResources = status.k8s.resourceHealth!.filter(r => r.status !== 'healthy');
+          const healthyResourceCount = status.k8s.resourceHealth!.length - unhealthyResources.length;
+          return `
         <h4 style="margin-top: 1rem; margin-bottom: 0.5rem;">Resource Health</h4>
-        ${status.k8s.resourceHealth.map(resource => `
+        ${unhealthyResources.map(resource => `
           <div class="info-row">
             <span class="label">${resource.kind}/${resource.name}:</span>
             <span class="value">
@@ -438,33 +441,29 @@ async function loadSystemStatus() {
             </span>
           </div>
         `).join('')}
-        ` : ''}
+        ${healthyResourceCount > 0 ? `
+          <div class="info-row healthy-summary">
+            <span class="label">Healthy:</span>
+            <span class="value"><span class="status-badge healthy">${healthyResourceCount} resource${healthyResourceCount !== 1 ? 's' : ''} healthy</span></span>
+          </div>
+        ` : ''}`;
+        })() : ''}
       </div>
 
-      ${status.healthChecks && status.healthChecks.length > 0 ? (() => {
-        const unhealthyChecks = status.healthChecks.filter(c => c.status !== 'healthy');
-        const healthyCount = status.healthChecks.length - unhealthyChecks.length;
-        return `
+      ${status.healthChecks && status.healthChecks.length > 0 ? `
       <div class="status-card">
         <h3>Service Health Checks</h3>
-        ${unhealthyChecks.map(check => `
+        ${status.healthChecks.map(check => `
           <div class="info-row">
             <span class="label">${check.name}:</span>
             <span class="value">
               <span class="status-badge ${check.status}">${check.status}</span>
               ${check.responseTime ? `${check.responseTime}ms` : ''}
-              ${check.error ? `<span class="check-error" title="${check.error}">(!)</span>` : ''}
             </span>
           </div>
         `).join('')}
-        ${healthyCount > 0 ? `
-          <div class="info-row healthy-summary">
-            <span class="label">Healthy:</span>
-            <span class="value"><span class="status-badge healthy">${healthyCount} service${healthyCount !== 1 ? 's' : ''} healthy</span></span>
-          </div>
-        ` : ''}
-      </div>`;
-      })() : ''}
+      </div>
+      ` : ''}
 
       <div class="status-card">
         <h3>Dashboard</h3>

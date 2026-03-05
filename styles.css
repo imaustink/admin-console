@@ -358,15 +358,6 @@ main {
   opacity: 0.75;
 }
 
-/* Inline error hint on unhealthy service rows */
-.check-error {
-  color: #f87171;
-  font-size: 0.6rem;
-  font-weight: 700;
-  margin-left: 3px;
-  cursor: default;
-}
-
 /* Info Rows */
 .device-info, .node-info {
   margin-bottom: 4px;
