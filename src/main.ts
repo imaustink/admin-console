@@ -16,6 +16,9 @@ autoUpdater.logger = logger;
 autoUpdater.autoDownload = false; // Manual download trigger
 autoUpdater.autoInstallOnAppQuit = true;
 
+// Capture the real isPackaged value before it may be overridden below
+const isPackaged = app.isPackaged;
+
 // For personal use without Apple Developer account
 // This disables signature verification (not recommended for public distribution)
 if (process.platform === 'darwin') {
@@ -32,8 +35,32 @@ if (process.platform === 'darwin') {
 // Load configuration
 let config: any = {};
 try {
-  // Support CONFIG_PATH environment variable for production deployments
-  const configPath = process.env.CONFIG_PATH || path.join(__dirname, '../config.json');
+  let configPath: string;
+
+  if (process.env.CONFIG_PATH) {
+    // Allow explicit override via environment variable
+    configPath = process.env.CONFIG_PATH;
+  } else if (!isPackaged) {
+    // Development: load from project root
+    configPath = path.join(__dirname, '../config.json');
+  } else {
+    // Production: load from user data directory (writable, persistent)
+    const userDataPath = app.getPath('userData');
+    configPath = path.join(userDataPath, 'config.json');
+
+    // On first run, seed config from bundled example
+    if (!fs.existsSync(configPath)) {
+      const examplePath = path.join(process.resourcesPath, 'config.example.json');
+      if (fs.existsSync(examplePath)) {
+        fs.mkdirSync(userDataPath, { recursive: true });
+        fs.copyFileSync(examplePath, configPath);
+        logger.info(`Created config file from example: ${configPath}`);
+      } else {
+        logger.warn('No config.example.json found in resources to initialize config');
+      }
+    }
+  }
+
   logger.info(`Loading configuration from: ${configPath}`);
   const configData = fs.readFileSync(configPath, 'utf-8');
   config = JSON.parse(configData);
