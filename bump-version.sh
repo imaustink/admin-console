@@ -29,8 +29,8 @@ TAG="v${NEW_VERSION}"
 
 echo "Bumping to ${TAG}..."
 
-git add package.json
-git commit -m "chore: bump version to ${NEW_VERSION}"
+git add package.json package-lock.json
+git commit -m "chore: release version ${NEW_VERSION}"
 git push
 
 git tag "$TAG"
