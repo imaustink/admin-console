@@ -4,6 +4,8 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { getLogger, closeLogger, isLoggerClosed } from './utils/logger';
 import { exec } from 'child_process';
+import * as https from 'https';
+import * as os from 'os';
 
 // Check if running in test mode
 const TEST_MODE = process.env.TEST_MODE === 'true' || process.env.NODE_ENV === 'test';
@@ -231,8 +233,11 @@ autoUpdater.on('checking-for-update', () => {
   mainWindow?.webContents.send('update:checking');
 });
 
+let pendingUpdateInfo: any = null;
+
 autoUpdater.on('update-available', (info) => {
   logger.info('Update available', info);
+  pendingUpdateInfo = info;
   mainWindow?.webContents.send('update:available', info);
 });
 
@@ -259,6 +264,35 @@ autoUpdater.on('update-downloaded', (info) => {
   mainWindow?.webContents.send('update:downloaded', info);
 });
 
+// Manually download a URL to destPath, following redirects, with progress callbacks.
+function downloadFile(url: string, destPath: string, onProgress: (pct: number) => void): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const attempt = (currentUrl: string) => {
+      https.get(currentUrl, (res) => {
+        if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+          attempt(res.headers.location);
+          return;
+        }
+        if (res.statusCode !== 200) {
+          reject(new Error(`Download failed with status ${res.statusCode}`));
+          return;
+        }
+        const total = parseInt(res.headers['content-length'] || '0', 10);
+        let received = 0;
+        const file = fs.createWriteStream(destPath);
+        res.on('data', (chunk: Buffer) => {
+          received += chunk.length;
+          if (total > 0) onProgress(Math.round((received / total) * 100));
+        });
+        res.pipe(file);
+        file.on('finish', () => file.close(() => resolve()));
+        file.on('error', reject);
+      }).on('error', reject);
+    };
+    attempt(url);
+  });
+}
+
 // IPC Handlers for Updates
 ipcMain.handle('update:check', async () => {
   try {
@@ -279,6 +313,21 @@ ipcMain.handle('update:check', async () => {
 ipcMain.handle('update:download', async () => {
   try {
     logger.info('IPC: update:download called');
+    // On macOS, bypass Squirrel (which rejects unsigned apps) by downloading the zip directly.
+    if (process.platform === 'darwin' && pendingUpdateInfo) {
+      const tag: string = pendingUpdateInfo.tag;
+      const filename: string = pendingUpdateInfo.path; // e.g. Homelab-Dashboard-2.0.7-universal-mac.zip
+      const url = `https://github.com/imaustink/admin-console/releases/download/${tag}/${filename}`;
+      const destPath = path.join(os.tmpdir(), filename);
+      logger.info(`Downloading update directly: ${url} -> ${destPath}`);
+      await downloadFile(url, destPath, (pct) => {
+        mainWindow?.webContents.send('update:download-progress', { percent: pct });
+      });
+      downloadedUpdateFile = destPath;
+      logger.info('Direct download complete', { destPath });
+      mainWindow?.webContents.send('update:downloaded', pendingUpdateInfo);
+      return;
+    }
     return await autoUpdater.downloadUpdate();
   } catch (error) {
     logger.error('IPC: update:download failed', error);
