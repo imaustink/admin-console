@@ -182,6 +182,8 @@ export class UnifiController {
         version: device.version,
         state: device.state,
         uptime: device.uptime,
+        upgradable: device.upgradable || false,
+        upgradeToFirmware: device.upgrade_to_firmware,
       }));
 
       logger.info(`Found ${devices.length} Unifi devices`);

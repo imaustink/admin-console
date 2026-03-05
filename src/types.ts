@@ -10,6 +10,8 @@ export interface UnifiDevice {
   version: string;
   state: number;
   uptime: number;
+  upgradable?: boolean;
+  upgradeToFirmware?: string;
 }
 
 export interface InternetStats {
@@ -94,6 +96,19 @@ export interface K8sHealthCheckResult {
   hidden?: boolean;
 }
 
+export interface UpdateInfo {
+  version: string;
+  releaseDate: string;
+  releaseNotes?: string;
+}
+
+export interface UpdateProgress {
+  bytesPerSecond: number;
+  percent: number;
+  transferred: number;
+  total: number;
+}
+
 export interface K8sNode {
   name: string;
   status: string;
@@ -166,6 +181,18 @@ export interface ElectronAPI {
   };
   app: {
     exit: () => Promise<void>;
+  };
+  update: {
+    check: () => Promise<any>;
+    download: () => Promise<any>;
+    install: () => Promise<void>;
+    getVersion: () => Promise<string>;
+    onChecking: (callback: () => void) => void;
+    onAvailable: (callback: (event: any, info: UpdateInfo) => void) => void;
+    onNotAvailable: (callback: (event: any, info: any) => void) => void;
+    onError: (callback: (event: any, error: string) => void) => void;
+    onDownloadProgress: (callback: (event: any, progress: UpdateProgress) => void) => void;
+    onDownloaded: (callback: (event: any, info: UpdateInfo) => void) => void;
   };
 }
 

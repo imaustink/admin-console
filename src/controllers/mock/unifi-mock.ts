@@ -33,6 +33,8 @@ export class UnifiControllerMock {
         version: '6.5.55',
         state: 1,
         uptime: 2592000,
+        upgradable: true,
+        upgradeToFirmware: '6.5.59',
       },
       {
         _id: '2',
@@ -44,6 +46,7 @@ export class UnifiControllerMock {
         version: '6.5.55',
         state: 1,
         uptime: 1728000,
+        upgradable: false,
       },
       {
         _id: '3',
@@ -55,6 +58,7 @@ export class UnifiControllerMock {
         version: '6.5.55',
         state: 1,
         uptime: 1728000,
+        upgradable: false,
       },
       {
         _id: '4',
@@ -66,6 +70,7 @@ export class UnifiControllerMock {
         version: '3.0.20',
         state: 1,
         uptime: 7776000,
+        upgradable: false,
       },
     ];
   }

@@ -73,6 +73,16 @@ The dashboard supports two authentication methods:
 
 See [DEPLOYMENT.md](DEPLOYMENT.md) for instructions on deploying to a Raspberry Pi.
 
+## Auto-Updates
+
+The application supports automatic updates via GitHub Releases. Users will be notified when a new version is available and can update with a single click.
+
+See [AUTO_UPDATE_SETUP.md](AUTO_UPDATE_SETUP.md) for:
+- Setting up GitHub Releases
+- Publishing updates
+- Code signing requirements
+- Testing auto-updates
+
 ## Running the Application
 
 ### Development Mode

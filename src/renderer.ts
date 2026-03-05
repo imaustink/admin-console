@@ -112,7 +112,7 @@ async function loadUnifiDevices() {
           </div>
           <div class="info-row">
             <span class="label">Version:</span>
-            <span class="value">${device.version || 'N/A'}</span>
+            <span class="value">${device.version || 'N/A'}${device.upgradable && device.upgradeToFirmware ? ` <span style="color: #f59e0b;">(Update available: ${device.upgradeToFirmware})</span>` : ''}</span>
           </div>
           <div class="info-row">
             <span class="label">Uptime:</span>
@@ -123,7 +123,9 @@ async function loadUnifiDevices() {
           <button class="btn btn-warning" onclick="powerCycleDevice('${device._id}', '${device.name}')">
             Power Cycle
           </button>
-          <button class="btn btn-info" onclick="updateFirmware('${device._id}', '${device.name}')">
+          <button class="btn ${device.upgradable ? 'btn-info' : 'btn-secondary'}" 
+                  onclick="updateFirmware('${device._id}', '${device.name}')"
+                  ${!device.upgradable ? 'disabled title="No firmware update available"' : ''}>
             Update Firmware
           </button>
         </div>
@@ -198,15 +200,10 @@ async function loadK8sNodes() {
             <span class="label">MAC:</span>
             <span class="value">${node.mac}</span>
           </div>` : ''}
-          ${hasPoePort && mapping ? `
+          ${mapping ? `
           <div class="info-row">
-            <span class="label">PoE Switch:</span>
-            <span class="value">${mapping.switchName} Port ${mapping.portIdx}</span>
-          </div>` : ''}
-          ${!hasPoePort ? `
-          <div class="info-row">
-            <span class="label">PoE Status:</span>
-            <span class="value" style="color: #f59e0b;">Not on PoE switch</span>
+            <span class="label">Switch Port:</span>
+            <span class="value">${mapping.switchName} Port ${mapping.portIdx}${hasPoePort ? ' <span style="color: #10b981;">(PoE)</span>' : ' <span style="color: #6b7280;">(Non-PoE)</span>'}</span>
           </div>` : ''}
           <div class="info-row">
             <span class="label">OS:</span>
@@ -724,3 +721,111 @@ async function executeAptCommand() {
 (window as any).openAptModal = openAptModal;
 (window as any).closeAptModal = closeAptModal;
 (window as any).executeAptCommand = executeAptCommand;
+// ============================================================================
+// Auto-Update Handlers
+// ============================================================================
+
+let updateInfo: any = null;
+
+function showUpdateModal(title: string, message: string) {
+  const modal = document.getElementById('update-modal');
+  const titleEl = document.getElementById('update-title');
+  const messageEl = document.getElementById('update-message');
+  
+  if (modal && titleEl && messageEl) {
+    titleEl.textContent = title;
+    messageEl.textContent = message;
+    modal.style.display = 'flex';
+  }
+}
+
+function closeUpdateModal() {
+  const modal = document.getElementById('update-modal');
+  if (modal) {
+    modal.style.display = 'none';
+  }
+}
+
+async function downloadUpdate() {
+  const downloadBtn = document.getElementById('update-download-btn');
+  const progressDiv = document.getElementById('update-progress');
+  
+  if (downloadBtn) downloadBtn.style.display = 'none';
+  if (progressDiv) progressDiv.style.display = 'block';
+  
+  try {
+    await window.electronAPI.update.download();
+  } catch (error) {
+    alert(`Update download failed: ${(error as Error).message}`);
+    closeUpdateModal();
+  }
+}
+
+async function installUpdate() {
+  try {
+    await window.electronAPI.update.install();
+  } catch (error) {
+    alert(`Update installation failed: ${(error as Error).message}`);
+  }
+}
+
+// Register update event listeners
+window.electronAPI.update.onChecking(() => {
+  console.log('Checking for updates...');
+});
+
+window.electronAPI.update.onAvailable((event: any, info: any) => {
+  console.log('Update available:', info);
+  updateInfo = info;
+  showUpdateModal(
+    'Update Available',
+    `Version ${info.version} is available. Would you like to download it?`
+  );
+});
+
+window.electronAPI.update.onNotAvailable((event: any, info: any) => {
+  console.log('No updates available', info);
+});
+
+window.electronAPI.update.onError((event: any, error: string) => {
+  console.error('Update error:', error);
+  alert(`Update check failed: ${error}`);
+});
+
+window.electronAPI.update.onDownloadProgress((event: any, progress: any) => {
+  console.log('Download progress:', progress);
+  const progressBar = document.getElementById('update-progress-bar');
+  const progressText = document.getElementById('update-progress-text');
+  
+  if (progressBar) {
+    progressBar.style.width = `${progress.percent}%`;
+  }
+  
+  if (progressText) {
+    const mbTransferred = (progress.transferred / 1024 / 1024).toFixed(2);
+    const mbTotal = (progress.total / 1024 / 1024).toFixed(2);
+    const speed = (progress.bytesPerSecond / 1024 / 1024).toFixed(2);
+    progressText.textContent = `Downloading: ${mbTransferred}MB / ${mbTotal}MB (${speed}MB/s)`;
+  }
+});
+
+window.electronAPI.update.onDownloaded((event: any, info: any) => {
+  console.log('Update downloaded:', info);
+  const messageEl = document.getElementById('update-message');
+  const progressDiv = document.getElementById('update-progress');
+  const laterBtn = document.getElementById('update-later-btn');
+  const installBtn = document.getElementById('update-install-btn');
+  
+  if (messageEl) {
+    messageEl.textContent = 'Update downloaded and ready to install!';
+  }
+  
+  if (progressDiv) progressDiv.style.display = 'none';
+  if (laterBtn) laterBtn.textContent = 'Cancel';
+  if (installBtn) installBtn.style.display = 'inline-block';
+});
+
+// Make update functions global
+(window as any).closeUpdateModal = closeUpdateModal;
+(window as any).downloadUpdate = downloadUpdate;
+(window as any).installUpdate = installUpdate;

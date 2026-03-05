@@ -1,15 +1,17 @@
 {
   "name": "homelab-dashboard",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Unified dashboard for Kubernetes and Unifi management",
   "main": "dist/main.js",
   "scripts": {
     "build": "tsc",
-    "start": "npm run build && electron .",
-    "dev": "tsc && electron .",
+    "start": "NODE_ENV=development npm run build && electron .",
+    "dev": "NODE_ENV=development tsc && electron .",
     "test-mode": "TEST_MODE=true npm start",
     "build:rpi": "npm run build && electron-builder --linux --arm64",
+    "build:macos": "npm run build && electron-builder --mac --universal",
     "package:rpi": "./build-rpi.sh",
+    "package:macos": "./build-macos.sh",
     "deploy:rpi": "./deploy-rpi.sh"
   },
   "keywords": [
@@ -20,6 +22,10 @@
   ],
   "author": "",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/imaustink/admin-console.git"
+  },
   "devDependencies": {
     "@types/node": "^20.10.6",
     "electron": "^28.1.0",
@@ -29,6 +35,7 @@
   "dependencies": {
     "@kubernetes/client-node": "^0.20.0",
     "axios": "^1.6.5",
+    "electron-updater": "^6.8.3",
     "winston": "^3.11.0"
   },
   "build": {
@@ -47,10 +54,38 @@
       "target": [
         {
           "target": "dir",
-          "arch": ["arm64"]
+          "arch": [
+            "arm64"
+          ]
         }
       ],
       "category": "System"
-    }
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "universal"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "universal"
+          ]
+        }
+      ],
+      "category": "public.app-category.utilities",
+      "identity": null
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "imaustink",
+        "repo": "admin-console"
+      }
+    ]
   }
 }
+

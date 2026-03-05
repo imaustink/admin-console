@@ -1,4 +1,5 @@
 import { app, BrowserWindow, ipcMain, screen } from 'electron';
+import { autoUpdater } from 'electron-updater';
 import * as path from 'path';
 import * as fs from 'fs';
 import { getLogger, closeLogger, isLoggerClosed } from './utils/logger';
@@ -9,6 +10,24 @@ const TEST_MODE = process.env.TEST_MODE === 'true' || process.env.NODE_ENV === '
 
 const logger = getLogger();
 let mainWindow: BrowserWindow | null = null;
+
+// Configure auto-updater
+autoUpdater.logger = logger;
+autoUpdater.autoDownload = false; // Manual download trigger
+autoUpdater.autoInstallOnAppQuit = true;
+
+// For personal use without Apple Developer account
+// This disables signature verification (not recommended for public distribution)
+if (process.platform === 'darwin') {
+  process.env.ELECTRON_UPDATER_ALLOW_DOWNGRADE = 'true';
+  // Disable signature verification for personal use
+  (autoUpdater as any).disableWebInstaller = false;
+  Object.defineProperty(app, 'isPackaged', {
+    get() {
+      return true;
+    }
+  });
+}
 
 // Load configuration
 let config: any = {};
@@ -112,6 +131,20 @@ app.whenReady().then(() => {
   
   createWindow();
 
+  // Initialize auto-updater (skip in test mode and development)
+  // Check if running from node_modules (development) or actual packaged app
+  const isDevMode = process.execPath.includes('node_modules');
+  if (!TEST_MODE && !isDevMode && process.env.NODE_ENV !== 'development') {
+    logger.info('Initializing auto-updater');
+    setTimeout(() => {
+      autoUpdater.checkForUpdates().catch(err => {
+        logger.error('Auto-update check failed', err);
+      });
+    }, 3000); // Check after 3 seconds to let app load first
+  } else {
+    logger.info('Skipping auto-updater (development mode)');
+  }
+
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       logger.info('Activating app, creating new window');
@@ -134,6 +167,78 @@ app.on('before-quit', () => {
   if (!isLoggerClosed()) {
     logger.info('App quitting');
   }
+});
+
+// Auto-updater event handlers
+autoUpdater.on('checking-for-update', () => {
+  logger.info('Checking for update...');
+  mainWindow?.webContents.send('update:checking');
+});
+
+autoUpdater.on('update-available', (info) => {
+  logger.info('Update available', info);
+  mainWindow?.webContents.send('update:available', info);
+});
+
+autoUpdater.on('update-not-available', (info) => {
+  logger.info('Update not available', info);
+  mainWindow?.webContents.send('update:not-available', info);
+});
+
+autoUpdater.on('error', (err) => {
+  logger.error('Update error', err);
+  mainWindow?.webContents.send('update:error', err.message);
+});
+
+autoUpdater.on('download-progress', (progressObj) => {
+  logger.info('Download progress',  progressObj);
+  mainWindow?.webContents.send('update:download-progress', progressObj);
+});
+
+autoUpdater.on('update-downloaded', (info) => {
+  logger.info('Update downloaded', info);
+  mainWindow?.webContents.send('update:downloaded', info);
+});
+
+// IPC Handlers for Updates
+ipcMain.handle('update:check', async () => {
+  try {
+    logger.info('IPC: update:check called');
+    // Skip update checks in development mode
+    const isDevMode = process.execPath.includes('node_modules');
+    if (isDevMode || TEST_MODE || process.env.NODE_ENV === 'development') {
+      logger.info('Skipping update check (development mode)');
+      return null;
+    }
+    return await autoUpdater.checkForUpdates();
+  } catch (error) {
+    logger.error('IPC: update:check failed', error);
+    throw error;
+  }
+});
+
+ipcMain.handle('update:download', async () => {
+  try {
+    logger.info('IPC: update:download called');
+    return await autoUpdater.downloadUpdate();
+  } catch (error) {
+    logger.error('IPC: update:download failed', error);
+    throw error;
+  }
+});
+
+ipcMain.handle('update:install', async () => {
+  try {
+    logger.info('IPC: update:install called - app will quit and install');
+    autoUpdater.quitAndInstall(false, true);
+  } catch (error) {
+    logger.error('IPC: update:install failed', error);
+    throw error;
+  }
+});
+
+ipcMain.handle('update:getVersion', async () => {
+  return app.getVersion();
 });
 
 // IPC Handlers for Unifi
