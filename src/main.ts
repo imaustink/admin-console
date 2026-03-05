@@ -198,7 +198,7 @@ app.whenReady().then(() => {
       autoUpdater.checkForUpdates().catch(err => {
         logger.error('Auto-update periodic check failed', err);
       });
-    }, 1 * 60 * 1000); // Check every 5 minutes
+    }, 1 * 60 * 1000); // Check every 1 minutes
   } else {
     logger.info('Skipping auto-updater (development mode)');
   }
@@ -265,7 +265,14 @@ autoUpdater.on('update-downloaded', (info) => {
 });
 
 // Manually download a URL to destPath, following redirects, with progress callbacks.
-function downloadFile(url: string, destPath: string, onProgress: (pct: number) => void): Promise<void> {
+interface DownloadProgress {
+  percent: number;
+  transferred: number;
+  total: number;
+  bytesPerSecond: number;
+}
+
+function downloadFile(url: string, destPath: string, onProgress: (p: DownloadProgress) => void): Promise<void> {
   return new Promise((resolve, reject) => {
     const attempt = (currentUrl: string) => {
       https.get(currentUrl, (res) => {
@@ -278,11 +285,18 @@ function downloadFile(url: string, destPath: string, onProgress: (pct: number) =
           return;
         }
         const total = parseInt(res.headers['content-length'] || '0', 10);
-        let received = 0;
+        let transferred = 0;
+        let startTime = Date.now();
         const file = fs.createWriteStream(destPath);
         res.on('data', (chunk: Buffer) => {
-          received += chunk.length;
-          if (total > 0) onProgress(Math.round((received / total) * 100));
+          transferred += chunk.length;
+          const elapsed = (Date.now() - startTime) / 1000 || 0.001;
+          onProgress({
+            percent: total > 0 ? Math.round((transferred / total) * 100) : 0,
+            transferred,
+            total,
+            bytesPerSecond: Math.round(transferred / elapsed),
+          });
         });
         res.pipe(file);
         file.on('finish', () => file.close(() => resolve()));
@@ -320,8 +334,8 @@ ipcMain.handle('update:download', async () => {
       const url = `https://github.com/imaustink/admin-console/releases/download/${tag}/${filename}`;
       const destPath = path.join(os.tmpdir(), filename);
       logger.info(`Downloading update directly: ${url} -> ${destPath}`);
-      await downloadFile(url, destPath, (pct) => {
-        mainWindow?.webContents.send('update:download-progress', { percent: pct });
+      await downloadFile(url, destPath, (progress) => {
+        mainWindow?.webContents.send('update:download-progress', progress);
       });
       downloadedUpdateFile = destPath;
       logger.info('Direct download complete', { destPath });
