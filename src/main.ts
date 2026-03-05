@@ -48,15 +48,17 @@ try {
     const userDataPath = app.getPath('userData');
     configPath = path.join(userDataPath, 'config.json');
 
+    // Always ensure userData directory exists
+    fs.mkdirSync(userDataPath, { recursive: true });
+
     // On first run, seed config from bundled example
     if (!fs.existsSync(configPath)) {
       const examplePath = path.join(process.resourcesPath, 'config.example.json');
       if (fs.existsSync(examplePath)) {
-        fs.mkdirSync(userDataPath, { recursive: true });
         fs.copyFileSync(examplePath, configPath);
         logger.info(`Created config file from example: ${configPath}`);
       } else {
-        logger.warn('No config.example.json found in resources to initialize config');
+        logger.warn(`No config.example.json found in resources. Please create config at: ${configPath}`);
       }
     }
   }
@@ -67,7 +69,8 @@ try {
   logger.info('Configuration loaded successfully');
 } catch (error) {
   logger.error('Failed to load config.json', error);
-  console.error('❌ Failed to load config.json. Please ensure it exists and is valid.');
+  const userDataPath = isPackaged ? app.getPath('userData') : path.join(__dirname, '..');
+  console.error(`❌ Failed to load config.json. Please ensure it exists at: ${path.join(userDataPath, 'config.json')}`);
 }
 
 // Log uncaught exceptions
