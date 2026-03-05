@@ -13,6 +13,7 @@ export class UnifiController {
   private isUnifiOS: boolean = false; // UDM Pro, UDR, etc.
   private cacheDir: string;
   private cacheFile: string;
+  private loginInProgress: Promise<void> | null = null;
 
   constructor(
     private host: string,
@@ -104,71 +105,82 @@ export class UnifiController {
     }
   }
 
-  private async validateCachedCookie(): Promise<boolean> {
-    if (!this.cookie) return false;
-    
-    try {
-      // Try a simple API call to validate the cookie
-      await this.client.get(this.getApiPath(`/api/s/${this.siteName}/self`), {
-        headers: { Cookie: this.cookie },
-      });
-      logger.info('Cached UniFi cookie is still valid');
-      return true;
-    } catch (error: any) {
-      logger.info('Cached UniFi cookie is invalid, will re-authenticate');
-      this.cookie = null;
-      this.clearCache();
-      return false;
-    }
-  }
-
   async login(): Promise<void> {
-    try {
-      logger.info('Logging in to Unifi Controller...');
-      
-      // UDM Pro/UniFi OS uses different endpoint
-      const loginEndpoint = this.isUnifiOS ? '/api/auth/login' : '/api/login';
-      logger.info(`Using login endpoint: ${loginEndpoint}`);
-      
-      const response = await this.client.post(loginEndpoint, {
-        username: this.username,
-        password: this.password,
-      });
-
-      const cookies = response.headers['set-cookie'];
-      if (cookies && cookies.length > 0) {
-        this.cookie = cookies.join(';');
-        this.saveCachedCookie();
-        logger.info('Successfully logged in to Unifi Controller');
-      } else {
-        throw new Error('No cookies received from login');
-      }
-    } catch (error: any) {
-      const errorMsg = error.response ? `HTTP ${error.response.status}: ${error.response.statusText}` : error.message;
-      logger.error('Failed to login to Unifi Controller:', errorMsg);
-      logger.error('Login URL:', `${this.client.defaults.baseURL}${this.isUnifiOS ? '/api/auth/login' : '/api/login'}`);
-      throw new Error(`Unifi login failed: ${errorMsg}`);
+    // Deduplicate concurrent logins — if one is already in flight, wait for it
+    if (this.loginInProgress) {
+      logger.info('Login already in progress, waiting...');
+      return this.loginInProgress;
     }
+
+    this.loginInProgress = (async () => {
+      try {
+        logger.info('Logging in to Unifi Controller...');
+
+        // UDM Pro/UniFi OS uses different endpoint
+        const loginEndpoint = this.isUnifiOS ? '/api/auth/login' : '/api/login';
+        logger.info(`Using login endpoint: ${loginEndpoint}`);
+
+        const response = await this.client.post(loginEndpoint, {
+          username: this.username,
+          password: this.password,
+        });
+
+        const cookies = response.headers['set-cookie'];
+        if (cookies && cookies.length > 0) {
+          this.cookie = cookies.join(';');
+          this.saveCachedCookie();
+          logger.info('Successfully logged in to Unifi Controller');
+        } else {
+          throw new Error('No cookies received from login');
+        }
+      } catch (error: any) {
+        this.cookie = null;
+        this.clearCache();
+        const errorMsg = error.response ? `HTTP ${error.response.status}: ${error.response.statusText}` : error.message;
+        logger.error('Failed to login to Unifi Controller:', errorMsg);
+        logger.error('Login URL:', `${this.client.defaults.baseURL}${this.isUnifiOS ? '/api/auth/login' : '/api/login'}`);
+        throw new Error(`Unifi login failed: ${errorMsg}`);
+      } finally {
+        this.loginInProgress = null;
+      }
+    })();
+
+    return this.loginInProgress;
   }
 
   private async ensureLoggedIn(): Promise<void> {
     if (!this.cookie) {
       await this.login();
-    } else {
-      // Validate cached cookie before using it
-      const isValid = await this.validateCachedCookie();
-      if (!isValid) {
+    }
+    // Do NOT validate on every call — trust the cached cookie until a 401/403 is received.
+    // Re-auth on demand is handled by withAuth().
+  }
+
+  /**
+   * Execute an authenticated API call. On 401/403, clears the stale session and
+   * re-authenticates once before retrying. Concurrent re-auth is deduplicated via login().
+   */
+  private async withAuth<T>(fn: () => Promise<T>): Promise<T> {
+    await this.ensureLoggedIn();
+    try {
+      return await fn();
+    } catch (error: any) {
+      const status = error.response?.status;
+      if (status === 401 || status === 403) {
+        logger.info(`Received ${status} from UniFi, clearing cache and re-authenticating...`);
+        this.cookie = null;
+        this.clearCache();
         await this.login();
+        return await fn();
       }
+      throw error;
     }
   }
 
   async getDevices(): Promise<UnifiDevice[]> {
-    await this.ensureLoggedIn();
-    
-    try {
+    return this.withAuth(async () => {
       logger.info('Fetching Unifi devices...');
-      
+
       const response = await this.client.get(this.getApiPath(`/api/s/${this.siteName}/stat/device`), {
         headers: { Cookie: this.cookie! },
       });
@@ -189,16 +201,14 @@ export class UnifiController {
 
       logger.info(`Found ${devices.length} Unifi devices`);
       return devices;
-    } catch (error: any) {
+    }).catch((error: any) => {
       logger.error('Failed to get Unifi devices:', error.message);
       throw new Error(`Failed to get devices: ${error.message}`);
-    }
+    });
   }
 
   async getInternetStats(): Promise<InternetStats> {
-    await this.ensureLoggedIn();
-    
-    try {
+    return this.withAuth(async () => {
       logger.info('Fetching internet statistics...');
       const [healthResponse, statsResponse] = await Promise.all([
         this.client.get(this.getApiPath(`/api/s/${this.siteName}/stat/health`), {
@@ -264,60 +274,44 @@ export class UnifiController {
 
       logger.info('Internet stats retrieved successfully', stats);
       return stats;
-    } catch (error: any) {
+    }).catch((error: any) => {
       logger.error('Failed to get internet stats:', error.message);
       throw new Error(`Failed to get internet stats: ${error.message}`);
-    }
+    });
   }
 
   async powerCycle(deviceId: string): Promise<void> {
-    await this.ensureLoggedIn();
-    
-    try {
+    return this.withAuth(async () => {
       logger.info(`Power cycling device ${deviceId}...`);
       await this.client.post(
         this.getApiPath(`/api/s/${this.siteName}/cmd/devmgr`),
-        {
-          cmd: 'power-cycle',
-          mac: deviceId,
-        },
-        {
-          headers: { Cookie: this.cookie! },
-        }
+        { cmd: 'power-cycle', mac: deviceId },
+        { headers: { Cookie: this.cookie! } }
       );
       logger.info(`Successfully power cycled device ${deviceId}`);
-    } catch (error: any) {
+    }).catch((error: any) => {
       logger.error(`Failed to power cycle device ${deviceId}:`, error.message);
       throw new Error(`Failed to power cycle: ${error.message}`);
-    }
+    });
   }
 
   async updateFirmware(deviceId: string): Promise<void> {
-    await this.ensureLoggedIn();
-    
-    try {
+    return this.withAuth(async () => {
       logger.info(`Updating firmware for device ${deviceId}...`);
       await this.client.post(
         this.getApiPath(`/api/s/${this.siteName}/cmd/devmgr`),
-        {
-          cmd: 'upgrade',
-          mac: deviceId,
-        },
-        {
-          headers: { Cookie: this.cookie! },
-        }
+        { cmd: 'upgrade', mac: deviceId },
+        { headers: { Cookie: this.cookie! } }
       );
       logger.info(`Successfully initiated firmware update for device ${deviceId}`);
-    } catch (error: any) {
+    }).catch((error: any) => {
       logger.error(`Failed to update firmware for device ${deviceId}:`, error.message);
       throw new Error(`Failed to update firmware: ${error.message}`);
-    }
+    });
   }
 
   async getSwitchPorts(switchMac: string): Promise<any[]> {
-    await this.ensureLoggedIn();
-    
-    try {
+    return this.withAuth(async () => {
       logger.info(`Fetching ports for switch ${switchMac}...`);
       const response = await this.client.get(this.getApiPath(`/api/s/${this.siteName}/stat/device/${switchMac}`), {
         headers: { Cookie: this.cookie! },
@@ -331,16 +325,14 @@ export class UnifiController {
       const ports = device.port_table || [];
       logger.info(`Found ${ports.length} ports on switch ${switchMac}`);
       return ports;
-    } catch (error: any) {
+    }).catch((error: any) => {
       logger.error(`Failed to get switch ports for ${switchMac}:`, error.message);
       throw new Error(`Failed to get switch ports: ${error.message}`);
-    }
+    });
   }
 
   async findPortByClient(clientMac: string): Promise<{ switchName: string; portIdx: number; poeAvailable: boolean } | null> {
-    await this.ensureLoggedIn();
-    
-    try {
+    return this.withAuth(async () => {
       logger.info(`Finding port for client ${clientMac}...`);
       
       // Get all devices
@@ -383,16 +375,14 @@ export class UnifiController {
 
       logger.info(`Client ${clientMac} not found on any switch port`);
       return null;
-    } catch (error: any) {
+    }).catch((error: any) => {
       logger.error(`Failed to find port for client ${clientMac}:`, error.message);
       throw new Error(`Failed to find port: ${error.message}`);
-    }
+    });
   }
 
   async powerCyclePort(switchMac: string, portIdx: number): Promise<void> {
-    await this.ensureLoggedIn();
-    
-    try {
+    return this.withAuth(async () => {
       logger.info(`Power cycling port ${portIdx} on switch ${switchMac}...`);
       
       // First, disable PoE
@@ -427,16 +417,14 @@ export class UnifiController {
       );
 
       logger.info(`Successfully power cycled port ${portIdx} on switch ${switchMac}`);
-    } catch (error: any) {
+    }).catch((error: any) => {
       logger.error(`Failed to power cycle port ${portIdx} on switch ${switchMac}:`, error.message);
       throw new Error(`Failed to power cycle port: ${error.message}`);
-    }
+    });
   }
 
   async getAllClients(): Promise<any[]> {
-    await this.ensureLoggedIn();
-    
-    try {
+    return this.withAuth(async () => {
       logger.info('Fetching all clients...');
       const response = await this.client.get(this.getApiPath(`/api/s/${this.siteName}/stat/sta`), {
         headers: { Cookie: this.cookie! },
@@ -445,10 +433,10 @@ export class UnifiController {
       const clients = response.data.data || [];
       logger.info(`Found ${clients.length} clients`);
       return clients;
-    } catch (error: any) {
+    }).catch((error: any) => {
       logger.error('Failed to get clients:', error.message);
       throw new Error(`Failed to get clients: ${error.message}`);
-    }
+    });
   }
 
   async logout(): Promise<void> {
