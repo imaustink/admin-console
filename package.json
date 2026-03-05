@@ -83,7 +83,8 @@
       {
         "provider": "github",
         "owner": "imaustink",
-        "repo": "admin-console"
+        "repo": "admin-console",
+        "releaseType": "release"
       }
     ]
   }
