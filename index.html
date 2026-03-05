@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';">
+  <title>Homelab Dashboard</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Homelab Dashboard</h1>
+      <button id="exit-btn" class="btn btn-danger exit-btn">Exit</button>
+    </header>
+
+    <div class="tabs">
+      <button class="tab-button active" data-tab="unifi">UniFi Devices</button>
+      <button class="tab-button" data-tab="k8s">Kubernetes</button>
+      <button class="tab-button" data-tab="status">Status</button>
+    </div>
+
+    <main>
+      <!-- UniFi Tab -->
+      <div id="unifi" class="tab-content active">
+        <div class="tab-header">
+          <h2>UniFi Network Devices</h2>
+          <button id="refresh-unifi" class="btn btn-primary">Refresh</button>
+        </div>
+        <div id="unifi-devices" class="device-grid"></div>
+      </div>
+
+      <!-- Kubernetes Tab -->
+      <div id="k8s" class="tab-content">
+        <div class="tab-header">
+          <h2>Kubernetes Cluster Nodes</h2>
+          <button id="refresh-k8s" class="btn btn-primary">Refresh</button>
+        </div>
+        <div id="k8s-nodes" class="device-grid"></div>
+      </div>
+
+      <!-- Status Tab -->
+      <div id="status" class="tab-content">
+        <div class="tab-header">
+          <h2>System Status</h2>
+          <button id="refresh-status" class="btn btn-primary">Refresh</button>
+        </div>
+        <div id="status-info" class="status-grid"></div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Command Prompt Modal -->
+  <div id="command-modal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Run SSH Command</h3>
+        <button class="modal-close" onclick="closeCommandModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <label for="modal-node-name">Node:</label>
+        <input type="text" id="modal-node-name" readonly>
+        
+        <label for="modal-command" style="margin-top: 8px;">Command:</label>
+        <textarea id="modal-command" placeholder="Enter command to run on node..."></textarea>
+        
+        <div id="modal-output" class="output-display" style="display: none;"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeCommandModal()">Close</button>
+        <button class="btn btn-primary" onclick="executeCommand()">Execute</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- APT Commands Modal -->
+  <div id="apt-modal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>APT Commands</h3>
+        <button class="modal-close" onclick="closeAptModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <label for="apt-node-name">Node:</label>
+        <input type="text" id="apt-node-name" readonly>
+        
+        <label for="apt-command" style="margin-top: 8px;">Select Command:</label>
+        <select id="apt-command">
+          <option value="update">Update (apt-get update)</option>
+          <option value="upgrade">Upgrade (apt-get upgrade -y)</option>
+          <option value="dist-upgrade">Dist-Upgrade (apt-get dist-upgrade -y)</option>
+          <option value="autoremove">Autoremove (apt-get autoremove -y)</option>
+          <option value="autoclean">Autoclean (apt-get autoclean)</option>
+          <option value="clean">Clean (apt-get clean)</option>
+        </select>
+        
+        <div id="apt-output" class="output-display" style="display: none;"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeAptModal()">Close</button>
+        <button class="btn btn-primary" onclick="executeAptCommand()">Execute</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Update Notification Modal -->
+  <div id="update-modal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 id="update-title">Update Available</h3>
+      </div>
+      <div class="modal-body">
+        <p id="update-message">A new version is available!</p>
+        <div id="update-progress" style="display: none;">
+          <div class="progress-bar">
+            <div id="update-progress-bar" class="progress-fill"></div>
+          </div>
+          <p id="update-progress-text">Downloading...</p>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="update-later-btn" onclick="closeUpdateModal()">Later</button>
+        <button class="btn btn-primary" id="update-download-btn" onclick="downloadUpdate()">Download</button>
+        <button class="btn btn-success" id="update-install-btn" onclick="installUpdate()" style="display: none;">Install & Restart</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="dist/renderer.js"></script>
+</body>
+</html>

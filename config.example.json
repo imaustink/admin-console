@@ -1,0 +1,56 @@
+{
+  "unifi": {
+    "host": "unifi.local",
+    "port": 8443,
+    "username": "admin",
+    "password": "your-password-here",
+    "site": "default"
+  },
+  "kubernetes": {
+    "cluster": [
+      "https://192.168.1.100:6443",
+      "https://192.168.1.101:6443",
+      "https://192.168.1.102:6443"
+    ],
+    "token": "eyJhbGciOiJSUzI1NiIsImtpZCI6...",
+    "caData": "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0t...",
+    "skipTLSVerify": false,
+    "ssh": {
+      "username": "ubuntu",
+      "password": "your-password",
+      "port": 22
+    },
+    "resourceFilters": [
+      {
+        "kind": "DaemonSet",
+        "name": "kube-proxy",
+        "namespace": "kube-system"
+      },
+      {
+        "kind": "Deployment",
+        "name": "internal-tool",
+        "namespace": "default"
+      }
+    ]
+  },
+  "healthChecks": [
+    {
+      "name": "Google DNS",
+      "url": "https://dns.google",
+      "method": "GET",
+      "expectedStatus": 200,
+      "timeout": 5000,
+      "interval": 60000,
+      "hidden": false
+    },
+    {
+      "name": "Local Service",
+      "url": "http://localhost:3000/health",
+      "method": "GET",
+      "expectedStatus": 200,
+      "timeout": 3000,
+      "interval": 30000,
+      "hidden": false
+    }
+  ]
+}
