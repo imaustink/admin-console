@@ -350,6 +350,23 @@ main {
   border: 1px solid rgba(148, 163, 184, 0.3);
 }
 
+/* Healthy summary row — visually de-emphasized */
+.info-row.healthy-summary {
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px solid rgba(148, 163, 184, 0.15);
+  opacity: 0.75;
+}
+
+/* Inline error hint on unhealthy service rows */
+.check-error {
+  color: #f87171;
+  font-size: 0.6rem;
+  font-weight: 700;
+  margin-left: 3px;
+  cursor: default;
+}
+
 /* Info Rows */
 .device-info, .node-info {
   margin-bottom: 4px;
