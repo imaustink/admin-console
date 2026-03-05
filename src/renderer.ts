@@ -788,8 +788,13 @@ window.electronAPI.update.onNotAvailable((event: any, info: any) => {
 });
 
 window.electronAPI.update.onError((event: any, error: string) => {
+  // Silently ignore "latest-mac.yml not found" — this is transient while CI is still building
+  if (error.includes('latest-mac.yml') || error.includes('Cannot find latest')) {
+    console.warn('Update check skipped: release artifacts not yet available');
+    return;
+  }
   console.error('Update error:', error);
-  alert(`Update check failed: ${error}`);
+  alert(`Update error: ${error}`);
 });
 
 window.electronAPI.update.onDownloadProgress((event: any, progress: any) => {

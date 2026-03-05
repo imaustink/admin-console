@@ -20,11 +20,8 @@ autoUpdater.autoInstallOnAppQuit = true;
 const isPackaged = app.isPackaged;
 
 // For personal use without Apple Developer account
-// This disables signature verification (not recommended for public distribution)
 if (process.platform === 'darwin') {
   process.env.ELECTRON_UPDATER_ALLOW_DOWNGRADE = 'true';
-  // Disable code signature verification for unsigned personal builds
-  (autoUpdater as any).verifyUpdateCodeSignature = false;
   Object.defineProperty(app, 'isPackaged', {
     get() {
       return true;
@@ -254,8 +251,11 @@ autoUpdater.on('download-progress', (progressObj) => {
   mainWindow?.webContents.send('update:download-progress', progressObj);
 });
 
+let downloadedUpdateFile: string | null = null;
+
 autoUpdater.on('update-downloaded', (info) => {
   logger.info('Update downloaded', info);
+  downloadedUpdateFile = (info as any).downloadedFile || null;
   mainWindow?.webContents.send('update:downloaded', info);
 });
 
@@ -289,7 +289,32 @@ ipcMain.handle('update:download', async () => {
 ipcMain.handle('update:install', async () => {
   try {
     logger.info('IPC: update:install called - app will quit and install');
-    autoUpdater.quitAndInstall(false, true);
+    if (process.platform === 'darwin' && downloadedUpdateFile) {
+      // Bypass Squirrel.Mac's code signature check by extracting the zip ourselves.
+      // Squirrel requires a signed app; this approach uses ditto directly.
+      const zipPath = downloadedUpdateFile;
+      const appBundle = path.dirname(path.dirname(path.dirname(app.getAppPath())));
+      const extractDir = path.join(require('os').tmpdir(), 'homelab-dashboard-update');
+      const scriptPath = path.join(require('os').tmpdir(), 'homelab-update.sh');
+      const script = [
+        '#!/bin/bash',
+        'sleep 2',
+        `rm -rf "${extractDir}"`,
+        `mkdir -p "${extractDir}"`,
+        `ditto -xk "${zipPath}" "${extractDir}"`,
+        `extracted_app=$(find "${extractDir}" -maxdepth 2 -name "*.app" | head -1)`,
+        'if [ -z "$extracted_app" ]; then echo "No .app found in update zip" >&2; exit 1; fi',
+        `rm -rf "${appBundle}"`,
+        `ditto "$extracted_app" "${appBundle}"`,
+        `rm -rf "${extractDir}"`,
+        `open "${appBundle}"`,
+      ].join('\n');
+      fs.writeFileSync(scriptPath, script, { mode: 0o755 });
+      exec(`bash "${scriptPath}" &`);
+      app.quit();
+    } else {
+      autoUpdater.quitAndInstall(false, true);
+    }
   } catch (error) {
     logger.error('IPC: update:install failed', error);
     throw error;
