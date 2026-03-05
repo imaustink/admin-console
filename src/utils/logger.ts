@@ -6,10 +6,22 @@ let logger: winston.Logger | null = null;
 let logFilePath: string = '';
 let isClosed: boolean = false;
 
+function getLogsDir(): string {
+  try {
+    // In a packaged Electron app, process.cwd() may be '/' (not writable).
+    // Use app.getPath('userData') which is always writable.
+    const { app } = require('electron');
+    return path.join(app.getPath('userData'), 'logs');
+  } catch {
+    // Fallback for non-Electron environments (e.g. unit tests)
+    return path.join(process.cwd(), 'logs');
+  }
+}
+
 export function getLogger(): winston.Logger & { getLogFile: () => string } {
   if (!logger) {
     // Create logs directory if it doesn't exist
-    const logsDir = path.join(process.cwd(), 'logs');
+    const logsDir = getLogsDir();
     if (!fs.existsSync(logsDir)) {
       fs.mkdirSync(logsDir, { recursive: true });
     }
