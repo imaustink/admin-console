@@ -12,19 +12,13 @@ jobs:
   create-release:
     name: Create GitHub Release
     runs-on: ubuntu-latest
-    outputs:
-      upload_url: ${{ steps.create_release.outputs.upload_url }}
     steps:
       - name: Create Release
-        id: create_release
-        uses: actions/create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ github.ref_name }}
-          release_name: ${{ github.ref_name }}
-          draft: false
-          prerelease: false
+        run: |
+          gh release delete ${{ github.ref_name }} --repo ${{ github.repository }} --yes 2>/dev/null || true
+          gh release create ${{ github.ref_name }} --repo ${{ github.repository }} --title ${{ github.ref_name }} --generate-notes
 
   build-macos:
     name: Build macOS
