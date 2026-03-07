@@ -39,36 +39,35 @@
 
 <div class="container">
   <header>
-    <h1>Homelab Dashboard</h1>
+    <span class="header-label">Homelab Dashboard</span>
+    <nav class="tabs">
+      <button
+        class="tab-button"
+        class:active={activeTab === 'unifi'}
+        on:click={() => setTab('unifi')}
+        on:touchstart|preventDefault={() => setTab('unifi')}
+      >
+        UniFi
+      </button>
+      <button
+        class="tab-button"
+        class:active={activeTab === 'k8s'}
+        on:click={() => setTab('k8s')}
+        on:touchstart|preventDefault={() => setTab('k8s')}
+      >
+        Kubernetes
+      </button>
+      <button
+        class="tab-button"
+        class:active={activeTab === 'status'}
+        on:click={() => setTab('status')}
+        on:touchstart|preventDefault={() => setTab('status')}
+      >
+        Status
+      </button>
+    </nav>
     <button class="btn btn-danger exit-btn" on:click={handleExit}>Exit</button>
   </header>
-
-  <div class="tabs">
-    <button
-      class="tab-button"
-      class:active={activeTab === 'unifi'}
-      on:click={() => setTab('unifi')}
-      on:touchstart|preventDefault={() => setTab('unifi')}
-    >
-      UniFi Devices
-    </button>
-    <button
-      class="tab-button"
-      class:active={activeTab === 'k8s'}
-      on:click={() => setTab('k8s')}
-      on:touchstart|preventDefault={() => setTab('k8s')}
-    >
-      Kubernetes
-    </button>
-    <button
-      class="tab-button"
-      class:active={activeTab === 'status'}
-      on:click={() => setTab('status')}
-      on:touchstart|preventDefault={() => setTab('status')}
-    >
-      Status
-    </button>
-  </div>
 
   <main>
     {#if activeTab === 'unifi'}

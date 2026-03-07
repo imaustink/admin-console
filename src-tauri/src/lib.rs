@@ -20,7 +20,14 @@ fn err(e: impl std::fmt::Display) -> String {
 }
 
 fn mock_mode() -> bool {
-    std::env::var("MOCK_MODE").map(|v| v == "1" || v == "true").unwrap_or(false)
+    for key in &["MOCK_MODE", "MOCK"] {
+        if let Ok(v) = std::env::var(key) {
+            if v == "1" || v.eq_ignore_ascii_case("true") {
+                return true;
+            }
+        }
+    }
+    false
 }
 
 // ─── UniFi commands ───────────────────────────────────────────────────────────

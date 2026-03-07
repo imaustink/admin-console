@@ -14,8 +14,8 @@ This is a **Tauri 2 + Svelte** dashboard application for managing a homelab envi
 - **Framework**: Tauri 2 (Rust backend + WebView frontend)
 - **Backend Language**: Rust (all business logic, HTTP clients, SSH execution)
 - **Frontend Language**: TypeScript + Svelte 4 + Vite 5
-- **Target Platform**: Raspberry Pi 3 (aarch64 / ARM64)
-- **UI**: Svelte components with dark-theme CSS (no heavy JS frameworks)
+- **Target Platform**: Raspberry Pi 4 (aarch64 / ARM64)
+- **UI**: Svelte components with minimal dark-theme CSS inspired by Vercel design language (no heavy JS frameworks)
 
 ### Project Structure
 
@@ -43,8 +43,9 @@ src-tauri/                 # Rust backend (Tauri)
 │   └── default.json       # Tauri v2 permission grants
 ├── icons/                 # App icons (RGBA PNG required)
 └── src/
-    ├── main.rs            # Rust entry point
+    ├── main.rs            # Rust entry point (sets GPU env vars for Pi 4)
     ├── lib.rs             # All #[tauri::command] definitions + app builder
+    ├── mock.rs            # Mock data returned when MOCK_MODE=1 or MOCK=1
     ├── config.rs          # Config loading (env var → dev path → XDG)
     ├── types.rs           # Rust types with serde Serialize/Deserialize
     ├── state.rs           # AppState (Arc<Mutex<UnifiClient>> + cache)
@@ -256,15 +257,51 @@ error!("Failed: {}", e);
 
 Logs go to stdout and the platform log directory via `tauri-plugin-log`.
 
+### 9. Mock Mode
+
+All Tauri commands check `mock_mode()` (defined in `lib.rs`) before hitting real backends. This lets the UI run without any config file or network access.
+
+Activate with either env var:
+```bash
+MOCK=1 npm run tauri dev
+# or
+MOCK_MODE=1 npm run tauri dev
+```
+
+Mock data lives in `src-tauri/src/mock.rs`. When adding new commands, always add a mock branch:
+```rust
+#[tauri::command]
+async fn my_command(state: State<'_, AppState>) -> CmdResult<MyType> {
+    if mock_mode() { return Ok(mock::my_data()); }
+    // real implementation
+}
+```
+
+Use the npm script to activate mock mode:
+```bash
+npm run tauri:mock
+```
+
 ## Performance Considerations
 
-This app runs on Raspberry Pi 3, so:
+This app runs on Raspberry Pi 4, so:
 
 - Avoid heavy JavaScript frameworks (React, Vue, etc.) — Svelte compiles away
 - Minimize re-renders by using Svelte's reactive stores/statements sparingly
 - Use CSS for animations when possible
 - Keep bundle size small — check `dist/` after `npm run build`
 - The Rust backend is compiled natively for aarch64 — no JS overhead for HTTP/SSH
+
+### GPU / WebKit Rendering on Pi 4
+
+The Pi 4's VideoCore VI GPU causes WebKit rendering corruption (scan lines, glitching) when GPU compositing is enabled. `main.rs` sets these env vars before starting the app:
+
+```rust
+std::env::set_var("WEBKIT_DISABLE_COMPOSITING_MODE", "1");
+std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+```
+
+**Do not remove these** — they must be set before `tauri::Builder` runs, which is why they live in `main.rs` rather than a shell wrapper.
 
 ## Common Tauri Command Namespaces
 
@@ -275,9 +312,9 @@ This app runs on Raspberry Pi 3, so:
 
 ## Deployment
 
-The app targets Raspberry Pi 3 (aarch64):
-- See `DEPLOYMENT.md` for deployment instructions
-- See `QUICKSTART.md` for local development setup
-- Use `build-rpi.sh` for ARM builds
-- Use `deploy-rpi.sh` for remote deployment
-- Config file: place `config.json` in the project root for dev, or `~/.local/share/homelab-dashboard/config.json` on the device
+The app targets Raspberry Pi 4 (aarch64):
+- See `DEPLOYMENT.md` for full deployment instructions
+- Use `build-rpi.sh` for ARM64 cross-compilation
+- Use `deploy-rpi.sh` for remote deployment via SSH (`console` host alias)
+- Config file: place `config.json` in the project root for dev, or `/etc/homelab-dashboard/config.json` on the device
+- Releases: run `./bump-version.sh patch` to tag; GitHub Actions builds and publishes signed AppImage automatically

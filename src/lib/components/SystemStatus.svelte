@@ -65,7 +65,7 @@
 
       {#if status.unifi.internet && status.unifi.internet.uptime !== undefined}
         {@const net = status.unifi.internet}
-        <h4 style="margin-top: 1rem; margin-bottom: 0.5rem;">Internet Statistics</h4>
+        <h4>Internet Statistics</h4>
         <div class="info-row">
           <span class="label">Uptime:</span>
           <span class="value">{formatUptime(net.uptime)} ({(net.uptimePercentage ?? 0).toFixed(2)}%)</span>
@@ -111,7 +111,7 @@
       {#if status.k8s.resourceHealth && status.k8s.resourceHealth.length > 0}
         {@const unhealthy = unhealthyResources(status.k8s.resourceHealth)}
         {@const healthyNum = healthyCount(status.k8s.resourceHealth)}
-        <h4 style="margin-top: 1rem; margin-bottom: 0.5rem;">Resource Health</h4>
+        <h4>Resource Health</h4>
         {#each unhealthy as res}
           <div class="info-row">
             <span class="label">{res.kind}/{res.name}:</span>
