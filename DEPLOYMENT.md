@@ -1,236 +1,124 @@
-# Raspberry Pi Deployment Guide
+# Deployment Guide
 
-This guide explains how to build, deploy, and run the Homelab Dashboard on a 64-bit Raspberry Pi running Raspberry Pi OS Trixie.
+How to build and deploy the Homelab Dashboard (Tauri AppImage) to a Raspberry Pi 4/5 running 64-bit Raspberry Pi OS.
 
 ## Prerequisites
 
-### On Your Development Machine
-- Node.js 18+ and npm
-- SSH access to your Raspberry Pi configured with the name "console"
+### Development Machine
+- Node.js 20+ and npm
+- Rust (via `rustup`) with the `aarch64-unknown-linux-gnu` target
+- `gcc-aarch64-linux-gnu` cross-linker (`sudo apt-get install gcc-aarch64-linux-gnu`)
+- Signing key at `~/.tauri/homelab-dashboard.key` (generated once — see below)
+- SSH config with a host named `console` pointing to the Pi
 
-### On Your Raspberry Pi
-- 64-bit Raspberry Pi OS Trixie
-- SSH server enabled
-- Sudo privileges for the deployment user (default: pi)
+### Raspberry Pi
+- 64-bit Raspberry Pi OS (Bookworm or later)
+- Desktop/display environment running (Tauri requires a display)
+- `sshpass` if using password-based SSH for K8s node management
 
-## SSH Configuration
+---
 
-Add the following to your `~/.ssh/config` file:
+## First-Time Setup
 
-```
-Host console
-    HostName 192.168.1.xxx  # Replace with your Pi's IP address
-    User pi
-    IdentityFile ~/.ssh/id_rsa  # Optional: specify your SSH key
-    Port 22
-```
-
-Test your connection:
+### 1. Generate the signing keypair (only once)
 ```bash
-ssh console
+npx tauri signer generate -w ~/.tauri/homelab-dashboard.key
 ```
+The public key is already set in `src-tauri/tauri.conf.json`. Keep the private key secret.
 
-## Installation Steps
-
-### 1. Install Dependencies (First Time Only)
-
+To use CI builds, add the private key as a GitHub Actions secret named `TAURI_SIGNING_PRIVATE_KEY`:
 ```bash
-npm install
+cat ~/.tauri/homelab-dashboard.key
+# Copy the output → GitHub repo → Settings → Secrets → New repository secret
 ```
 
-This will install electron-builder and all required dependencies.
-
-### 2. Create Configuration File
-
-Copy the example configuration and customize it:
-
+### 2. Add Rust ARM64 target
 ```bash
-cp config.example.json config.json
+rustup target add aarch64-unknown-linux-gnu
 ```
 
-Edit `config.json` with your UniFi and Kubernetes credentials.
+### 3. Create `config.json`
+Copy `config.example.json` to `config.json` and fill in your credentials.
 
-#### Kubernetes Configuration
+---
 
-The dashboard supports two methods for connecting to Kubernetes:
+## Building
 
-**Option 1: Service Account Token (Recommended for Production)**
-- More secure and portable
-- See [K8S_TOKEN_SETUP.md](K8S_TOKEN_SETUP.md) for detailed setup instructions
-- Add the following to `config.json`:
-
-```json
-{
-  "kubernetes": {
-    "cluster": "https://192.168.1.100:6443",
-    "token": "eyJhbGciOiJSUzI1NiIsImtpZCI6...",
-    "caData": "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0t...",
-    "skipTLSVerify": false
-  }
-}
-```
-
-**Option 2: Default Kubeconfig**
-- Simply omit the `kubernetes` section from `config.json`
-- The app will use `~/.kube/config` or `$KUBECONFIG`
-- Requires kubeconfig to be set up on the Raspberry Pi
-
-### 3. Build for Raspberry Pi
-
-Run the build script to compile and package the application:
-
+### Cross-compile for Raspberry Pi
 ```bash
 ./build-rpi.sh
 ```
+Output AppImage: `src-tauri/target/aarch64-unknown-linux-gnu/release/bundle/appimage/`
 
-This will:
-- Compile TypeScript files
-- Package the Electron app for ARM64 architecture
-- Create a compressed tarball at `build/homelab-dashboard-rpi-arm64.tar.gz`
+### Local development (native)
+```bash
+npm run tauri:dev       # real data (requires config.json)
+npm run tauri:mock      # mock data (no Pi needed)
+```
 
-### 4. Deploy to Raspberry Pi
+---
 
-Run the deployment script:
+## Deploying
 
 ```bash
 ./deploy-rpi.sh
 ```
 
 This will:
-- Upload the application package to your Pi
-- Extract it to `/opt/homelab-dashboard`
-- Upload your configuration file to `/etc/homelab-dashboard/config.json`
-- Install and start the systemd service
-- Enable the service to start on boot
+1. Upload the AppImage to `/opt/homelab-dashboard/` on the Pi
+2. Upload `config.json` (only if one doesn't already exist on the Pi)
+3. Install `homelab-dashboard.service` as a systemd service
+4. Enable and start the service
 
-## Managing the Service
-
-### View Service Status
-```bash
-ssh console 'sudo systemctl status homelab-dashboard'
+### SSH config requirement
+`~/.ssh/config` must have a `console` entry:
+```
+Host console
+    HostName 192.168.1.x
+    User admin
+    IdentityFile ~/.ssh/id_rsa
 ```
 
-### View Live Logs
+---
+
+## Configuration on the Pi
+
+Config file location: `/etc/homelab-dashboard/config.json`
+
+To edit it directly on the Pi:
 ```bash
+ssh console 'sudo nano /etc/homelab-dashboard/config.json'
+ssh console 'sudo systemctl restart homelab-dashboard'
+```
+
+See `config.example.json` for the full schema.
+
+---
+
+## Service Management
+
+```bash
+# Logs (live)
 ssh console 'sudo journalctl -u homelab-dashboard -f'
-```
 
-### View Recent Logs
-```bash
-ssh console 'sudo journalctl -u homelab-dashboard -n 100'
-```
+# Status
+ssh console 'sudo systemctl status homelab-dashboard'
 
-### Restart Service
-```bash
+# Restart
 ssh console 'sudo systemctl restart homelab-dashboard'
-```
 
-### Stop Service
-```bash
+# Stop
 ssh console 'sudo systemctl stop homelab-dashboard'
 ```
 
-### Start Service
+---
+
+## Releasing a New Version
+
 ```bash
-ssh console 'sudo systemctl start homelab-dashboard'
+./bump-version.sh patch    # or: minor, major, or explicit version like 2.2.0
 ```
 
-### Disable Auto-Start
-```bash
-ssh console 'sudo systemctl disable homelab-dashboard'
-```
+This bumps the version in `package.json`, `Cargo.toml`, and `tauri.conf.json`, commits, tags, and pushes. The GitHub Actions workflow then cross-compiles and publishes a signed release automatically.
 
-## File Locations on Raspberry Pi
-
-- **Application**: `/opt/homelab-dashboard/`
-- **Configuration**: `/etc/homelab-dashboard/config.json`
-- **Service File**: `/etc/systemd/system/homelab-dashboard.service`
-- **Logs**: Use `journalctl` commands above
-
-## Updating the Application
-
-To update the application after making changes:
-
-1. Build the new version:
-   ```bash
-   ./build-rpi.sh
-   ```
-
-2. Deploy the update:
-   ```bash
-   ./deploy-rpi.sh
-   ```
-
-The deploy script will automatically:
-- Backup the previous version
-- Stop the service
-- Deploy the new version
-- Restart the service
-
-## Troubleshooting
-
-### Service Won't Start
-Check the logs:
-```bash
-ssh console 'sudo journalctl -u homelab-dashboard -n 50'
-```
-
-Common issues:
-- Missing or invalid configuration file
-- Incorrect permissions
-- Display environment issues (if running with a GUI)
-
-### Configuration Changes
-After modifying `/etc/homelab-dashboard/config.json` on the Pi:
-```bash
-ssh console 'sudo systemctl restart homelab-dashboard'
-```
-
-### Rollback to Previous Version
-If a deployment fails, the previous version is backed up:
-```bash
-ssh console 'sudo systemctl stop homelab-dashboard'
-ssh console 'cd /opt/homelab-dashboard && sudo rm -rf * && sudo cp -r homelab-dashboard.backup.* .'
-ssh console 'sudo systemctl start homelab-dashboard'
-```
-
-## Customizing the Service
-
-The systemd service file is located at [homelab-dashboard.service](homelab-dashboard.service).
-
-To modify service settings:
-1. Edit the service file locally
-2. Run `./deploy-rpi.sh` to apply changes
-
-Key service parameters you might want to adjust:
-- **User/Group**: Change from `pi` if using a different user
-- **Environment**: Add custom environment variables
-- **Restart**: Modify restart behavior
-- **Resource Limits**: Adjust memory and CPU limits if needed
-
-## NPM Scripts
-
-- `npm run build` - Compile TypeScript
-- `npm run build:rpi` - Package for ARM64 Linux
-- `npm run package:rpi` - Run the full build script
-- `npm run deploy:rpi` - Run the deployment script
-- `npm start` - Run locally for testing
-- `npm run dev` - Development mode
-
-## Security Notes
-
-- The service runs with `NoNewPrivileges=true` for enhanced security
-- Configuration files should have restricted permissions (600 or 640)
-- Consider using SSH keys instead of passwords for deployment
-- Keep your Pi's OS and packages updated
-
-## Performance Considerations
-
-For Raspberry Pi 3 or older models:
-- The build might take longer due to limited CPU resources
-- Consider building on a more powerful machine and deploying
-- You may need to adjust the `RestartSec` value in the service file if the Pi is slow to start
-
-For Raspberry Pi 4 and newer:
-- Should run smoothly with default settings
-- May benefit from increased `LimitNOFILE` if managing many devices
+Running instances will detect the new version on next startup and prompt the user to update.

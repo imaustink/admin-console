@@ -5,4 +5,9 @@ build/
 .env
 config.json
 cache/
+# Rust / Tauri build artifacts
+src-tauri/target/
+src-tauri/gen/
+# Tauri signing keys (keep private key out of repo)
+*.key
 logs/

@@ -1,48 +1,33 @@
 #!/bin/bash
-
-# Build script for 64-bit Raspberry Pi OS Trixie
-# This script compiles TypeScript and packages the Electron app for ARM64 architecture
+# Build Homelab Dashboard for Raspberry Pi 4/5 (aarch64) via Tauri cross-compilation
 
 set -e
 
-echo "🔨 Building Homelab Dashboard for Raspberry Pi (ARM64)..."
+cd "$(dirname "$0")"
+. "$HOME/.cargo/env"
 
-# Colors for output
-GREEN='\033[0;32m'
-BLUE='\033[0;34m'
-RED='\033[0;31m'
-NC='\033[0m' # No Color
+echo "Adding aarch64 target (if not already present)..."
+rustup target add aarch64-unknown-linux-gnu
 
-# Clean previous builds
-echo -e "${BLUE}Cleaning previous builds...${NC}"
-rm -rf dist/ build/
+echo "Installing cross-compilation toolchain (if not already present)..."
+if ! command -v aarch64-linux-gnu-gcc &> /dev/null; then
+    sudo apt-get update -qq
+    sudo apt-get install -y gcc-aarch64-linux-gnu
+fi
 
-# Compile TypeScript
-echo -e "${BLUE}Compiling TypeScript...${NC}"
-npm run build
-
-# Check if compilation was successful
-if [ ! -d "dist" ]; then
-    echo -e "${RED}❌ TypeScript compilation failed${NC}"
+if [ ! -f "$HOME/.tauri/homelab-dashboard.key" ]; then
+    echo "ERROR: Signing key not found at ~/.tauri/homelab-dashboard.key"
+    echo "Generate it with: npx tauri signer generate -w ~/.tauri/homelab-dashboard.key"
     exit 1
 fi
 
-# Build for ARM64 Linux
-echo -e "${BLUE}Packaging for ARM64 Linux (Raspberry Pi)...${NC}"
-npm run build:rpi
+echo "Building Homelab Dashboard for Raspberry Pi (ARM64)..."
+TAURI_SIGNING_PRIVATE_KEY="$HOME/.tauri/homelab-dashboard.key" \
+CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc \
+PKG_CONFIG_ALLOW_CROSS=1 \
+  npm run tauri:build:rpi
 
-# Check if build was successful
-if [ ! -d "build/linux-arm64-unpacked" ]; then
-    echo -e "${RED}❌ Electron Builder failed${NC}"
-    exit 1
-fi
-
-# Create a tarball for easy deployment
-echo -e "${BLUE}Creating deployment package...${NC}"
-cd build/linux-arm64-unpacked
-tar -czf ../homelab-dashboard-rpi-arm64.tar.gz .
-cd ../..
-
-echo -e "${GREEN}✅ Build complete!${NC}"
-echo -e "${GREEN}Package location: build/homelab-dashboard-rpi-arm64.tar.gz${NC}"
-echo -e "${BLUE}Size: $(du -h build/homelab-dashboard-rpi-arm64.tar.gz | cut -f1)${NC}"
+APPIMAGE_DIR="src-tauri/target/aarch64-unknown-linux-gnu/release/bundle/appimage"
+echo ""
+echo "Build complete! Artifacts:"
+ls -lh "$APPIMAGE_DIR"/*.AppImage "$APPIMAGE_DIR"/*.AppImage.tar.gz "$APPIMAGE_DIR"/*.sig 2>/dev/null || true

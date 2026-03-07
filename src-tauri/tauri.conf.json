@@ -1,0 +1,49 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Homelab Dashboard",
+  "version": "2.1.0",
+  "identifier": "com.homelab.dashboard",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:5173",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "withGlobalTauri": false,
+    "windows": [
+      {
+        "title": "Homelab Dashboard",
+        "width": 1280,
+        "height": 800,
+        "fullscreen": true,
+        "resizable": true,
+        "center": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [],
+    "linux": {
+      "deb": {
+        "depends": []
+      }
+    },
+    "resources": {
+      "../config.example.json": "config.example.json"
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDQ4QjMxMjVDMjk2RjJCRkQKUldUOUsyOHBYQkt6U0RzWEZwWDEzWlpUY3czYk9IMWxDL3ZZT2xuQnRTdkdUK3lRS2JyRElRVEoK",
+      "endpoints": [
+        "https://github.com/imaustink/admin-console/releases/latest/download/latest.json"
+      ]
+    }
+  }
+}

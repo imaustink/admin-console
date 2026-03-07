@@ -1,97 +1,30 @@
 {
   "name": "homelab-dashboard",
-  "version": "2.0.15",
-  "description": "Unified dashboard for Kubernetes and Unifi management",
-  "main": "dist/main.js",
+  "version": "2.1.0",
+  "private": true,
+  "type": "module",
   "scripts": {
-    "build": "tsc",
-    "start": "NODE_ENV=development npm run build && electron .",
-    "dev": "NODE_ENV=development tsc && electron .",
-    "test-mode": "TEST_MODE=true npm start",
-    "build:rpi": "npm run build && electron-builder --linux --arm64",
-    "build:macos": "npm run build && electron-builder --mac --universal",
-    "package:rpi": "./build-rpi.sh",
-    "package:macos": "./build-macos.sh",
-    "deploy:rpi": "./deploy-rpi.sh"
-  },
-  "keywords": [
-    "kubernetes",
-    "unifi",
-    "dashboard",
-    "homelab"
-  ],
-  "author": "",
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/imaustink/admin-console.git"
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "tauri": "tauri",
+    "tauri:dev": "WEBKIT_DISABLE_DMABUF_RENDERER=1 WEBKIT_DISABLE_COMPOSITING_MODE=1 tauri dev",
+    "tauri:mock": "MOCK_MODE=1 WEBKIT_DISABLE_DMABUF_RENDERER=1 WEBKIT_DISABLE_COMPOSITING_MODE=1 tauri dev",
+    "tauri:build": "tauri build",
+    "tauri:build:rpi": "tauri build --target aarch64-unknown-linux-gnu"
   },
   "devDependencies": {
-    "@types/node": "^20.10.6",
-    "electron": "^28.1.0",
-    "electron-builder": "^24.9.1",
-    "typescript": "^5.3.3"
+    "@sveltejs/vite-plugin-svelte": "^3.0.0",
+    "@tauri-apps/cli": ">=2.0.0",
+    "svelte": "^4.2.0",
+    "svelte-check": "^3.6.0",
+    "tslib": "^2.6.2",
+    "typescript": "^5.3.3",
+    "vite": "^5.0.0"
   },
   "dependencies": {
-    "@kubernetes/client-node": "^0.20.0",
-    "axios": "^1.6.5",
-    "electron-updater": "^6.8.3",
-    "winston": "^3.11.0"
-  },
-  "build": {
-    "appId": "com.homelab.dashboard",
-    "productName": "Homelab Dashboard",
-    "directories": {
-      "output": "build"
-    },
-    "files": [
-      "dist/**/*",
-      "index.html",
-      "styles.css",
-      "package.json"
-    ],
-    "extraResources": [
-      {
-        "from": "config.example.json",
-        "to": "config.example.json"
-      }
-    ],
-    "linux": {
-      "target": [
-        {
-          "target": "dir",
-          "arch": [
-            "arm64"
-          ]
-        }
-      ],
-      "category": "System"
-    },
-    "mac": {
-      "target": [
-        {
-          "target": "dmg",
-          "arch": [
-            "universal"
-          ]
-        },
-        {
-          "target": "zip",
-          "arch": [
-            "universal"
-          ]
-        }
-      ],
-      "category": "public.app-category.utilities",
-      "identity": null
-    },
-    "publish": [
-      {
-        "provider": "github",
-        "owner": "imaustink",
-        "repo": "admin-console",
-        "releaseType": "release"
-      }
-    ]
+    "@tauri-apps/api": ">=2.0.0",
+    "@tauri-apps/plugin-log": ">=2.0.0",
+    "@tauri-apps/plugin-updater": ">=2.0.0"
   }
 }

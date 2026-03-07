@@ -8,209 +8,221 @@ Make sure to add secret files to the .gitignore and never include sensitive info
 
 ## Project Architecture
 
-This is an Electron-based dashboard application for managing a homelab environment with UniFi network devices and Kubernetes clusters.
+This is a **Tauri 2 + Svelte** dashboard application for managing a homelab environment with UniFi network devices and Kubernetes clusters.
 
 ### Tech Stack
-- **Framework**: Electron (Node.js + Chromium)
-- **Language**: TypeScript
-- **Target Platform**: Raspberry Pi 3 (ARM architecture)
-- **UI**: Vanilla HTML/CSS/JavaScript (no frameworks for performance)
+- **Framework**: Tauri 2 (Rust backend + WebView frontend)
+- **Backend Language**: Rust (all business logic, HTTP clients, SSH execution)
+- **Frontend Language**: TypeScript + Svelte 4 + Vite 5
+- **Target Platform**: Raspberry Pi 3 (aarch64 / ARM64)
+- **UI**: Svelte components with dark-theme CSS (no heavy JS frameworks)
 
 ### Project Structure
 
 ```
-src/
-├── main.ts           # Electron main process (IPC handlers, app lifecycle)
-├── preload.ts        # Electron preload script (contextBridge API)
-├── renderer.ts       # Frontend logic (UI interactions, API calls)
-├── types.ts          # TypeScript type definitions (including ElectronAPI)
-├── controllers/      # Backend controllers for external services
-│   ├── k8s.ts           # Kubernetes API client
-│   ├── unifi.ts         # UniFi Controller client
-│   ├── status.ts        # Health check controller
-│   ├── port-mapper.ts   # Node-to-switch port mapping
-│   └── mock/            # Mock implementations for TEST_MODE
-├── fixtures/         # Static test data
-└── utils/
-    └── logger.ts     # Application logging
+src/                       # Svelte frontend (TypeScript)
+├── main.ts                # Svelte app entry point
+├── app.css                # Global dark-theme styles
+├── App.svelte             # Root component (tabs, update check)
+└── lib/
+    ├── api.ts             # Typed Tauri invoke() wrappers
+    ├── types.ts           # Shared TypeScript types
+    └── components/
+        ├── UnifiDevices.svelte
+        ├── K8sNodes.svelte
+        ├── SystemStatus.svelte
+        └── modals/
+            ├── CommandModal.svelte
+            ├── AptModal.svelte
+            └── UpdateModal.svelte
+
+src-tauri/                 # Rust backend (Tauri)
+├── Cargo.toml
+├── tauri.conf.json
+├── capabilities/
+│   └── default.json       # Tauri v2 permission grants
+├── icons/                 # App icons (RGBA PNG required)
+└── src/
+    ├── main.rs            # Rust entry point
+    ├── lib.rs             # All #[tauri::command] definitions + app builder
+    ├── config.rs          # Config loading (env var → dev path → XDG)
+    ├── types.rs           # Rust types with serde Serialize/Deserialize
+    ├── state.rs           # AppState (Arc<Mutex<UnifiClient>> + cache)
+    └── controllers/
+        ├── mod.rs
+        ├── unifi.rs       # UniFi HTTP client (reqwest + cookie auth)
+        ├── k8s.rs         # K8s REST API client + SSH via tokio::process
+        └── port_mapper.rs # Maps K8s nodes to UniFi switch ports
 ```
 
 ## Key Architectural Patterns
 
-### 1. IPC Communication Flow (Electron)
+### 1. IPC Communication Flow (Tauri)
 
-When adding new functionality that requires backend operations:
+**Flow**: Svelte component → `src/lib/api.ts` → Tauri `invoke()` → Rust `#[tauri::command]` → Controller
 
-**Flow**: Renderer → Preload → Main Process → Controller
-
-1. **Controller** (`src/controllers/*.ts`): Implement the business logic
-   ```typescript
-   async doSomething(param: string): Promise<Result> {
-     // Implementation here
+1. **Controller** (`src-tauri/src/controllers/*.rs`): Implement logic using reqwest/tokio
+   ```rust
+   pub async fn do_something(&mut self, param: &str) -> Result<MyType> {
+       // reqwest HTTP or tokio::process::Command
    }
    ```
 
-2. **Main Process** (`src/main.ts`): Add IPC handler
+2. **Tauri command** (`src-tauri/src/lib.rs`): Expose as a command
+   ```rust
+   #[tauri::command]
+   async fn my_command(param: String, state: State<'_, AppState>) -> CmdResult<MyType> {
+       info!("my_command: {}", param);
+       let mut unifi = state.unifi.lock().await;
+       unifi.do_something(&param).await.map_err(err)
+   }
+   // Register in invoke_handler: tauri::generate_handler![my_command, ...]
+   ```
+
+3. **API wrapper** (`src/lib/api.ts`): Type-safe invoke wrapper
    ```typescript
-   ipcMain.handle('namespace:action', async (_, param: string) => {
-     try {
-       logger.info('IPC: namespace:action called', { param });
-       if (TEST_MODE) {
-         // Use mock controller
-       }
-       const controller = new Controller(config.section);
-       return await controller.doSomething(param);
-     } catch (error) {
-       logger.error('IPC: namespace:action failed', error);
-       throw error;
+   export async function myCommand(param: string): Promise<MyType> {
+     return invoke<MyType>('my_command', { param });
+   }
+   ```
+
+4. **Svelte component**: Call the API
+   ```svelte
+   <script lang="ts">
+     import { myCommand } from '../api';
+     async function handleClick() {
+       const result = await myCommand('value');
      }
-   });
+   </script>
    ```
 
-3. **Preload** (`src/preload.ts`): Expose to renderer via contextBridge
-   ```typescript
-   contextBridge.exposeInMainWorld('electronAPI', {
-     namespace: {
-       doSomething: (param: string) => ipcRenderer.invoke('namespace:action', param),
-     },
-   });
-   ```
+### 2. Tauri Command Error Handling
 
-4. **Types** (`src/types.ts`): Add TypeScript interface
-   ```typescript
-   export interface ElectronAPI {
-     namespace: {
-       doSomething: (param: string) => Promise<Result>;
-     };
-   }
-   ```
+All commands return `CmdResult<T>` which is `Result<T, String>`:
 
-5. **Renderer** (`src/renderer.ts`): Call from UI
-   ```typescript
-   async function handleAction(param: string) {
-     try {
-       const result = await window.electronAPI.namespace.doSomething(param);
-       alert('Success!');
-     } catch (error) {
-       alert(`Error: ${(error as Error).message}`);
-     }
-   }
-   ```
+```rust
+type CmdResult<T> = Result<T, String>;
 
-### 2. SSH Command Pattern (K8s Nodes)
+fn err(e: impl std::fmt::Display) -> String {
+    error!("{}", e);
+    e.to_string()
+}
 
-For operations requiring SSH access to Kubernetes nodes:
+// Usage:
+some_operation().await.map_err(err)
+```
 
-- SSH config is stored in `config.json` under `kubernetes.ssh`
-- Supports both key-based (`privateKey`) and password-based (`password`) authentication
-- Always use `StrictHostKeyChecking=no` for automation
-- Node IP addresses are retrieved via `getNodes()` method first
-- Example pattern in `K8sController.rebootNode()` and `K8sController.shutdownNode()`
-
-**Template for SSH commands:**
+On the frontend, `invoke()` throws a `string` error that can be caught:
 ```typescript
-async sshCommand(nodeName: string): Promise<void> {
-  // 1. Get node IP
-  const nodes = await this.getNodes();
-  const node = nodes.find(n => n.name === nodeName);
-  
-  if (!node || !node.ip) {
-    throw new Error(`Node ${nodeName} not found or has no IP address`);
-  }
-
-  // 2. Check SSH config
-  if (!this.sshConfig) {
-    throw new Error('SSH configuration not found in kubernetes config');
-  }
-
-  const sshPort = this.sshConfig.port || 22;
-  const sshUser = this.sshConfig.username;
-  
-  // 3. Build command based on auth method
-  let sshCommand = '';
-  
-  if (this.sshConfig.privateKey) {
-    sshCommand = `ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p ${sshPort} -i "${this.sshConfig.privateKey}" ${sshUser}@${node.ip} "your-command-here"`;
-  } else if (this.sshConfig.password) {
-    sshCommand = `sshpass -p "${this.sshConfig.password}" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p ${sshPort} ${sshUser}@${node.ip} "your-command-here"`;
-  } else {
-    throw new Error('No SSH authentication method configured');
-  }
-
-  // 4. Execute
-  await execAsync(sshCommand);
+try {
+  const result = await myCommand(param);
+} catch (e) {
+  console.error('Command failed:', e);
 }
 ```
 
-### 3. UI Action Buttons (Node/Device Cards)
+### 3. Shared State (`AppState`)
 
-Node and device cards use inline `onclick` handlers with global functions:
+`AppState` in `src-tauri/src/state.rs` holds:
+- `config: AppConfig` — loaded config
+- `unifi: Arc<Mutex<UnifiClient>>` — singleton client (preserves auth session)
+- `port_mapping_cache: Arc<Mutex<Option<PortMappingCache>>>` — 60s TTL cache
 
-**HTML Generation** (in `renderer.ts`):
-```typescript
-container.innerHTML = items.map(item => `
-  <div class="node-card">
-    <div class="node-actions">
-      <button class="btn btn-primary" onclick="doAction('${item.id}')">
-        Action
-      </button>
-    </div>
-  </div>
-`).join('');
-```
+The `UnifiClient` uses `Arc<Mutex<>>` because the HTTP session (cookie) must be shared across concurrent commands.
 
-**Function Definition** (global scope in `renderer.ts`):
-```typescript
-async function doAction(id: string) {
-  if (!confirm('Are you sure?')) return;
-  
-  try {
-    await window.electronAPI.namespace.doAction(id);
-    alert('Success!');
-    reloadData(); // Refresh the view
-  } catch (error) {
-    alert(`Error: ${(error as Error).message}`);
-  }
+### 4. UniFi Auth Retry Pattern
+
+All `UnifiClient` methods use a 2-attempt retry loop (never recursive async):
+
+```rust
+pub async fn some_method(&mut self) -> Result<SomeType> {
+    for attempt in 0u8..2 {
+        self.ensure_logged_in().await?;
+        let url = self.api_path("/api/s/.../endpoint");
+        let resp = self.http.get(&url)
+            .header("Cookie", self.set_cookie_header())
+            .send().await?;
+
+        let status = resp.status().as_u16();
+        if (status == 401 || status == 403) && attempt == 0 {
+            self.cookie = None;
+            continue; // retry with fresh login
+        }
+        if !resp.status().is_success() {
+            bail!("Request failed: HTTP {}", resp.status());
+        }
+        // process response and return
+        return Ok(...);
+    }
+    bail!("Failed after retry")
 }
 ```
 
-**Button Classes**:
-- `btn-primary`: Blue (default action)
-- `btn-success`: Green (safe/positive action)
-- `btn-info`: Cyan (informational action)
-- `btn-warning`: Orange (caution action)
-- `btn-danger`: Red (destructive action)
-- `btn-secondary`: Gray (neutral action)
+**Important**: Do NOT use `Box::pin(self.method()).await` for retry — async recursion with `&mut self` doesn't compile in Rust. Always use a loop.
 
-### 4. Mock Controllers (Testing)
+### 5. SSH Command Pattern (K8s Nodes)
 
-When adding new controller methods:
+SSH uses `tokio::process::Command` to invoke system `ssh`/`sshpass`:
 
-1. Implement in main controller (`src/controllers/*.ts`)
-2. Add mock implementation in `src/controllers/mock/*-mock.ts`
-3. Return realistic test data that matches the interface
-4. The main process checks `TEST_MODE` environment variable
+```rust
+async fn run_ssh(&self, node_ip: &str, command: &str) -> Result<String> {
+    let ssh = self.ssh.as_ref().ok_or("SSH not configured")?;
+    let port = ssh.port.unwrap_or(22);
 
-Example:
-```typescript
-// In K8sControllerMock
-async newMethod(param: string): Promise<Result> {
-  return {
-    // Mock data matching the Result interface
-  };
+    let mut cmd = if let Some(key) = &ssh.private_key {
+        let mut c = Command::new("ssh");
+        c.args(["-o", "StrictHostKeyChecking=no",
+                "-o", "UserKnownHostsFile=/dev/null",
+                "-p", &port.to_string(),
+                "-i", key,
+                &format!("{}@{}", ssh.username, node_ip),
+                command]);
+        c
+    } else if let Some(pass) = &ssh.password {
+        let mut c = Command::new("sshpass");
+        c.args(["-p", pass, "ssh",
+                "-o", "StrictHostKeyChecking=no",
+                "-p", &port.to_string(),
+                &format!("{}@{}", ssh.username, node_ip),
+                command]);
+        c
+    } else {
+        bail!("No SSH auth configured");
+    };
+
+    let output = cmd.output().await?;
+    Ok(String::from_utf8_lossy(&output.stdout).into_owned())
 }
 ```
 
-### 5. Configuration Structure
+### 6. Adding a New Feature
 
-Configuration is loaded from `config.json` in the main process:
+**Example: new K8s node action**
+
+1. Add method to `src-tauri/src/controllers/k8s.rs`
+2. Add `#[tauri::command]` in `src-tauri/src/lib.rs` + register in `generate_handler!`
+3. Add typed wrapper in `src/lib/api.ts`
+4. Add button/handler to `src/lib/components/K8sNodes.svelte`
+
+**Example: new tab**
+
+1. Add a `<button>` in the tab bar in `src/App.svelte`
+2. Create `src/lib/components/MyTab.svelte`
+3. Import and conditionally render in `App.svelte`
+
+### 7. Configuration Structure
+
+Config is loaded from (in order):
+1. `$CONFIG_PATH` env var
+2. `../../../config.json` relative to the binary (dev mode)
+3. `$XDG_DATA_HOME/homelab-dashboard/config.json`
 
 ```json
 {
   "unifi": {
-    "host": "...",
+    "host": "192.168.1.1",
     "port": 8443,
-    "username": "...",
+    "username": "admin",
     "password": "...",
     "site": "default"
   },
@@ -219,88 +231,53 @@ Configuration is loaded from `config.json` in the main process:
     "token": "...",
     "skipTLSVerify": true,
     "ssh": {
-      "username": "...",
-      "password": "...",  // OR privateKey
+      "username": "ubuntu",
+      "password": "...",
       "port": 22
     }
   },
-  "status": {
-    "healthChecks": [...]
-  }
+  "healthChecks": [
+    { "name": "My Service", "url": "http://...", "expectedStatus": 200 }
+  ]
 }
 ```
 
-### 6. Error Handling
+### 8. Logging
 
-**Backend (Controllers/Main)**:
-- Use try-catch blocks
-- Log errors with `logger.error()`
-- Throw descriptive Error objects
-- IPC handlers should re-throw to send to renderer
+Use `tracing` macros throughout Rust code:
 
-**Frontend (Renderer)**:
-- Use try-catch around API calls
-- Show user-friendly alerts with error messages
-- Consider reloading data after operations
+```rust
+use tracing::{info, warn, error};
 
-### 7. Logging
-
-Use the logger utility throughout:
-
-```typescript
-import logger from '../utils/logger';
-
-logger.info('Operation started', { param1, param2 });
-logger.warn('Warning condition');
-logger.error('Error occurred', error);
+info!("Operation started with param={}", param);
+warn!("Unexpected condition");
+error!("Failed: {}", e);
 ```
 
-Logs are written to `logs/` directory for debugging.
-
-## Adding New Features
-
-### Example: Adding a new node operation
-
-1. Add method to `K8sController` (follow SSH pattern if needed)
-2. Add IPC handler in `main.ts` under `k8s:` namespace
-3. Add mock implementation in `K8sControllerMock`
-4. Expose in `preload.ts` under `k8s` object
-5. Add TypeScript type in `types.ts` ElectronAPI interface
-6. Add button to node card HTML in `renderer.ts`
-7. Add handler function in `renderer.ts`
-8. Test with `TEST_MODE=true` first
-
-### Example: Adding a new tab
-
-1. Add HTML structure in `index.html`
-2. Add tab button with `data-tab` attribute
-3. Add content div with matching ID
-4. Add load function in `renderer.ts`
-5. Add refresh button handler
-6. Call load function in `DOMContentLoaded`
+Logs go to stdout and the platform log directory via `tauri-plugin-log`.
 
 ## Performance Considerations
 
 This app runs on Raspberry Pi 3, so:
 
-- Avoid heavy JavaScript frameworks (React, Vue, etc.)
-- Use vanilla DOM manipulation
-- Minimize re-renders
+- Avoid heavy JavaScript frameworks (React, Vue, etc.) — Svelte compiles away
+- Minimize re-renders by using Svelte's reactive stores/statements sparingly
 - Use CSS for animations when possible
-- Keep bundle size small
-- Disable GPU acceleration (done in main.ts)
+- Keep bundle size small — check `dist/` after `npm run build`
+- The Rust backend is compiled natively for aarch64 — no JS overhead for HTTP/SSH
 
-## Common Namespaces
+## Common Tauri Command Namespaces
 
-- `unifi:` - UniFi Controller operations
-- `k8s:` - Kubernetes operations
-- `status:` - Health checks and system status
-- `app:` - Application lifecycle (exit, etc.)
+- `unifi_*` — UniFi Controller operations
+- `k8s_*` — Kubernetes operations
+- `status_*` — Health checks and system status
+- `app_*` — Application lifecycle (exit, version)
 
 ## Deployment
 
-The app is designed to be deployed on Raspberry Pi 3:
+The app targets Raspberry Pi 3 (aarch64):
 - See `DEPLOYMENT.md` for deployment instructions
 - See `QUICKSTART.md` for local development setup
 - Use `build-rpi.sh` for ARM builds
 - Use `deploy-rpi.sh` for remote deployment
+- Config file: place `config.json` in the project root for dev, or `~/.local/share/homelab-dashboard/config.json` on the device

@@ -3,69 +3,101 @@ name: Build & Release
 on:
   push:
     tags:
-      - 'v*' # Triggers on tags like v1.0.0, v1.2.3
+      - 'v*'
 
 permissions:
-  contents: write # Required to create GitHub Releases
+  contents: write
 
 jobs:
-  create-release:
-    name: Create GitHub Release
-    runs-on: ubuntu-latest
-    steps:
-      - name: Create Release
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh release delete ${{ github.ref_name }} --repo ${{ github.repository }} --yes 2>/dev/null || true
-          gh release create ${{ github.ref_name }} --repo ${{ github.repository }} --title ${{ github.ref_name }} --generate-notes
-
-  build-macos:
-    name: Build macOS
-    runs-on: macos-latest
-    needs: create-release
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Compile TypeScript
-        run: npm run build
-
-      - name: Build & publish macOS
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npx electron-builder --mac --universal --publish always
-
   build-rpi:
     name: Build Raspberry Pi (Linux ARM64)
-    runs-on: ubuntu-latest
-    needs: create-release
+    runs-on: ubuntu-22.04
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
 
-      - name: Install dependencies
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-unknown-linux-gnu
+
+      - name: Install cross-compilation dependencies
+        run: |
+          sudo dpkg --add-architecture arm64
+          sudo bash -c 'cat > /etc/apt/sources.list.d/arm64.list << LIST
+          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports jammy main restricted universe multiverse
+          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports jammy-updates main restricted universe multiverse
+          LIST'
+          sudo apt-get update
+          sudo apt-get install -y \
+            gcc-aarch64-linux-gnu \
+            pkg-config \
+            libwebkit2gtk-4.1-dev:arm64 \
+            libssl-dev:arm64 \
+            libgtk-3-dev:arm64 \
+            librsvg2-dev:arm64 \
+            libayatana-appindicator3-dev:arm64 \
+            patchelf
+
+      - name: Install npm dependencies
         run: npm ci
 
-      - name: Compile TypeScript
-        run: npm run build
-
-      - name: Build & publish Raspberry Pi
+      - name: Build Tauri app (ARM64)
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npx electron-builder --linux --arm64 --publish always
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
+          PKG_CONFIG_SYSROOT_DIR: /usr/aarch64-linux-gnu
+          PKG_CONFIG_PATH: /usr/lib/aarch64-linux-gnu/pkgconfig
+          PKG_CONFIG_ALLOW_CROSS: "1"
+        run: npm run tauri:build:rpi
+
+      - name: Get version
+        id: version
+        run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Collect artifacts and build latest.json
+        id: artifacts
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          REPO: ${{ github.repository }}
+        run: |
+          APPIMAGE_DIR="src-tauri/target/aarch64-unknown-linux-gnu/release/bundle/appimage"
+          TARBALL=$(find "$APPIMAGE_DIR" -name "*.AppImage.tar.gz" | head -1)
+          SIG="${TARBALL}.sig"
+          FILENAME=$(basename "$TARBALL")
+          SIGNATURE=$(cat "$SIG")
+
+          cat > latest.json <<JSON
+          {
+            "version": "$VERSION",
+            "notes": "See the release notes on GitHub.",
+            "pub_date": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "platforms": {
+              "linux-aarch64": {
+                "url": "https://github.com/$REPO/releases/download/v$VERSION/$FILENAME",
+                "signature": "$SIGNATURE"
+              }
+            }
+          }
+          JSON
+
+          echo "tarball=$TARBALL" >> "$GITHUB_OUTPUT"
+          echo "sig=$SIG" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.version.outputs.version }}
+          TARBALL: ${{ steps.artifacts.outputs.tarball }}
+          SIG: ${{ steps.artifacts.outputs.sig }}
+        run: |
+          gh release create "v$VERSION" \
+            --title "v$VERSION" \
+            --generate-notes \
+            "$TARBALL" \
+            "$SIG" \
+            latest.json
