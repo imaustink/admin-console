@@ -64,6 +64,26 @@ async fn unifi_update_firmware(device_id: String, state: State<'_, AppState>) ->
     unifi.update_firmware(&device_id).await.map_err(err)
 }
 
+#[tauri::command]
+async fn unifi_get_clients(state: State<'_, AppState>) -> CmdResult<Vec<NetworkClient>> {
+    info!("unifi_get_clients called");
+    if mock_mode() { return Ok(mock::network_clients()); }
+    let mut unifi = state.unifi.lock().await;
+    unifi.get_network_clients().await.map_err(err)
+}
+
+#[tauri::command]
+async fn unifi_power_cycle_client_port(
+    sw_mac: String,
+    port_idx: u32,
+    state: State<'_, AppState>,
+) -> CmdResult<()> {
+    info!("unifi_power_cycle_client_port: switch={} port={}", sw_mac, port_idx);
+    if mock_mode() { info!("[mock] power_cycle_client_port {}:{}", sw_mac, port_idx); return Ok(()); }
+    let mut unifi = state.unifi.lock().await;
+    unifi.power_cycle_port(&sw_mac, port_idx).await.map_err(err)
+}
+
 // ─── Kubernetes commands ──────────────────────────────────────────────────────
 
 fn k8s_client(state: &AppState) -> CmdResult<controllers::k8s::K8sClient> {
@@ -351,6 +371,8 @@ pub fn run() {
             unifi_get_internet_stats,
             unifi_power_cycle,
             unifi_update_firmware,
+            unifi_get_clients,
+            unifi_power_cycle_client_port,
             // Kubernetes
             k8s_get_nodes,
             k8s_check_resource_health,

@@ -4,7 +4,7 @@ use serde::Deserialize;
 use std::time::Duration;
 use tracing::{info, warn};
 
-use crate::types::{InternetStats, UnifiDevice};
+use crate::types::{InternetStats, NetworkClient, UnifiDevice};
 
 // ─── Internal API response shapes ────────────────────────────────────────────
 
@@ -34,13 +34,26 @@ struct RawDevice {
 #[derive(Debug, Deserialize)]
 struct RawHealth {
     subsystem: Option<String>,
+    // UniFi returns these as floats in some firmware versions; use f64 to avoid silent None
     #[serde(rename = "rx_bytes-r")]
-    rx_bytes_r: Option<u64>,
+    rx_bytes_r: Option<f64>,
     #[serde(rename = "tx_bytes-r")]
-    tx_bytes_r: Option<u64>,
-    latency: Option<u32>,
+    tx_bytes_r: Option<f64>,
     uptime_stats: Option<serde_json::Value>,
     uptime: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Deserialize)]
+struct RawProviderCapabilities {
+    download_kilobits_per_second: Option<f64>,
+    upload_kilobits_per_second: Option<f64>,
+}
+
+#[derive(Debug, Deserialize)]
+struct RawNetworkConf {
+    purpose: Option<String>,
+    wan_networkgroup: Option<String>,
+    wan_provider_capabilities: Option<RawProviderCapabilities>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -49,6 +62,7 @@ struct RawSysinfo {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct RawClient {
     mac: Option<String>,
     ip: Option<String>,
@@ -59,6 +73,7 @@ struct RawClient {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[allow(dead_code)]
 pub struct RawPort {
     pub port_idx: Option<u32>,
     pub port_poe: Option<bool>,
@@ -231,6 +246,7 @@ impl UnifiClient {
             self.ensure_logged_in().await?;
             let health_url = self.api_path(&format!("/api/s/{}/stat/health", self.site));
             let sysinfo_url = self.api_path(&format!("/api/s/{}/stat/sysinfo", self.site));
+            let netconf_url = self.api_path(&format!("/api/s/{}/rest/networkconf", self.site));
             let cookie = self.set_cookie_header();
 
             let health_resp = self.http.get(&health_url).header("Cookie", &cookie).send().await?;
@@ -244,12 +260,23 @@ impl UnifiClient {
             }
 
             let sys_resp = self.http.get(&sysinfo_url).header("Cookie", &cookie).send().await;
+            let netconf_resp = self.http.get(&netconf_url).header("Cookie", &cookie).send().await;
 
             let health_data: ApiResponse<RawHealth> = health_resp.json().await?;
             let sysinfo_data: ApiResponse<RawSysinfo> = if let Ok(r) = sys_resp {
                 r.json().await.unwrap_or(ApiResponse { data: vec![] })
             } else {
                 ApiResponse { data: vec![] }
+            };
+            let wan1_conf: Option<RawProviderCapabilities> = if let Ok(r) = netconf_resp {
+                r.json::<ApiResponse<RawNetworkConf>>().await.ok()
+                    .and_then(|d| d.data.into_iter()
+                        .find(|n| n.purpose.as_deref() == Some("wan")
+                            && n.wan_networkgroup.as_deref() == Some("WAN"))
+                        .and_then(|n| n.wan_provider_capabilities)
+                    )
+            } else {
+                None
             };
 
             let wan = health_data
@@ -258,8 +285,15 @@ impl UnifiClient {
                 .find(|h| h.subsystem.as_deref() == Some("wan"))
                 .context("WAN health data not found")?;
 
-            let download_bitrate = wan.rx_bytes_r.unwrap_or(0) * 8;
-            let upload_bitrate = wan.tx_bytes_r.unwrap_or(0) * 8;
+            let latency = wan.uptime_stats.as_ref()
+                .and_then(|s| s.get("WAN"))
+                .and_then(|w| w.get("latency_average"))
+                .and_then(|v| v.as_f64())
+                .map(|v| v.round() as u32);
+            let download_bitrate = (wan.rx_bytes_r.unwrap_or(0.0) * 8.0) as u64;
+            let upload_bitrate   = (wan.tx_bytes_r.unwrap_or(0.0) * 8.0) as u64;
+            info!("WAN rx_bytes-r={:?} tx_bytes-r={:?} → down={} up={} bits/s",
+                wan.rx_bytes_r, wan.tx_bytes_r, download_bitrate, upload_bitrate);
 
             let (uptime, availability) = parse_uptime_stats(
                 wan.uptime_stats.as_ref(),
@@ -267,14 +301,21 @@ impl UnifiClient {
                 &sysinfo_data.data,
             );
 
+            let download_capacity = wan1_conf.as_ref()
+                .and_then(|c| c.download_kilobits_per_second)
+                .map(|kbps| kbps / 1000.0);
+            let upload_capacity = wan1_conf.as_ref()
+                .and_then(|c| c.upload_kilobits_per_second)
+                .map(|kbps| kbps / 1000.0);
+
             return Ok(InternetStats {
                 uptime,
                 uptime_percentage: availability,
-                download_speed: download_bitrate as f64 / 1_000_000.0,
-                upload_speed: upload_bitrate as f64 / 1_000_000.0,
                 download_bitrate,
                 upload_bitrate,
-                latency: wan.latency.unwrap_or(0),
+                latency,
+                download_capacity,
+                upload_capacity,
             });
         }
         bail!("get_internet_stats failed after retry")
@@ -330,6 +371,132 @@ impl UnifiClient {
         bail!("update_firmware failed after retry")
     }
 
+    pub async fn get_network_clients(&mut self) -> Result<Vec<NetworkClient>> {
+        // Fetch switch port PoE info best-effort to annotate which clients are PoE-powered.
+        // Build (sw_mac_lower, port_idx) → poe_enabled lookup.
+        use std::collections::HashMap;
+        let mut poe_map: HashMap<(String, u32), bool> = HashMap::new();
+        if let Ok(switch_ports) = self.get_all_switch_ports().await {
+            for (sw_mac, _, ports) in &switch_ports {
+                let sw_mac_lower = sw_mac.to_lowercase();
+                for port in ports {
+                    if let Some(idx) = port.port_idx {
+                        let enabled = port.port_poe.unwrap_or(false) && port.poe_enable.unwrap_or(false);
+                        poe_map.insert((sw_mac_lower.clone(), idx), enabled);
+                    }
+                }
+            }
+        }
+
+        for attempt in 0u8..2 {
+            self.ensure_logged_in().await?;
+            let cookie = self.set_cookie_header();
+
+            // Fetch active clients (/stat/sta) and known-client aliases (/rest/user) in parallel
+            let sta_url  = self.api_path(&format!("/api/s/{}/stat/sta",  self.site));
+            let user_url = self.api_path(&format!("/api/s/{}/rest/user", self.site));
+
+            let sta_resp = self.http.get(&sta_url).header("Cookie", &cookie).send().await?;
+
+            let status = sta_resp.status().as_u16();
+            if (status == 401 || status == 403) && attempt == 0 {
+                self.cookie = None;
+                continue;
+            }
+            if !sta_resp.status().is_success() {
+                bail!("get_network_clients failed: HTTP {}", sta_resp.status());
+            }
+
+            // /rest/user is best-effort — don't fail if it errors
+            let user_resp = self.http.get(&user_url).header("Cookie", &cookie).send().await.ok();
+
+            // Build MAC → (alias_name, alias_hostname, alias_oui) lookup from /rest/user
+            let mut alias_map: HashMap<String, (Option<String>, Option<String>, Option<String>)> =
+                HashMap::new();
+            if let Some(r) = user_resp {
+                if let Ok(payload) = r.json::<ApiResponse<serde_json::Value>>().await {
+                    for rec in payload.data {
+                        let mac = match rec.get("mac").and_then(|x| x.as_str()) {
+                            Some(m) => m.to_lowercase(),
+                            None => continue,
+                        };
+                        let name = rec.get("name").and_then(|x| x.as_str())
+                            .filter(|s| !s.is_empty())
+                            .map(String::from);
+                        let hostname = rec.get("hostname").and_then(|x| x.as_str())
+                            .filter(|s| !s.is_empty())
+                            .map(String::from);
+                        let oui = rec.get("oui").and_then(|x| x.as_str())
+                            .filter(|s| !s.is_empty())
+                            .map(String::from);
+                        alias_map.insert(mac, (name, hostname, oui));
+                    }
+                }
+            }
+
+            let payload: ApiResponse<serde_json::Value> = sta_resp.json().await?;
+            let clients = payload.data.into_iter().map(|v| {
+                let mac = v.get("mac").and_then(|x| x.as_str()).unwrap_or("").to_lowercase();
+                let ip = v.get("ip").and_then(|x| x.as_str()).map(String::from);
+
+                // Names: prefer /stat/sta values, fall back to /rest/user aliases
+                let sta_name = v.get("name").and_then(|x| x.as_str())
+                    .filter(|s| !s.is_empty())
+                    .map(String::from);
+                let sta_hostname = v.get("hostname").and_then(|x| x.as_str())
+                    .filter(|s| !s.is_empty())
+                    .map(String::from);
+                let sta_oui = v.get("oui").and_then(|x| x.as_str())
+                    .filter(|s| !s.is_empty())
+                    .map(String::from);
+
+                let alias = alias_map.get(&mac);
+                let alias_name     = alias.and_then(|(n, _, _)| n.clone());
+                let alias_hostname = alias.and_then(|(_, h, _)| h.clone());
+                let alias_oui      = alias.and_then(|(_, _, o)| o.clone());
+
+                // Best name: sta alias > sta hostname > rest/user alias > rest/user hostname > IP > MAC
+                let display_name = sta_name
+                    .or(alias_name)
+                    .or_else(|| sta_hostname.clone())
+                    .or_else(|| alias_hostname.clone())
+                    .or_else(|| ip.clone())
+                    .or_else(|| Some(mac.clone()));
+
+                // Best hostname: prefer sta, fall back to rest/user
+                let hostname = sta_hostname.or(alias_hostname);
+
+                // Best OUI: prefer sta, fall back to rest/user
+                let oui = sta_oui.or(alias_oui);
+
+                let is_wired = v.get("is_wired").and_then(|x| x.as_bool()).unwrap_or(false);
+                let network  = v.get("network").and_then(|x| x.as_str()).map(String::from);
+                let essid    = v.get("essid").and_then(|x| x.as_str()).map(String::from);
+                let ap_mac   = v.get("ap_mac").and_then(|x| x.as_str()).map(String::from);
+                let sw_mac     = v.get("sw_mac").and_then(|x| x.as_str()).map(String::from);
+                let sw_port    = v.get("sw_port").and_then(|x| x.as_u64()).map(|x| x as u32);
+                let poe_enabled = sw_mac.as_deref()
+                    .zip(sw_port)
+                    .map(|(m, p)| *poe_map.get(&(m.to_lowercase(), p)).unwrap_or(&false))
+                    .unwrap_or(false);
+                let signal     = v.get("signal").and_then(|x| x.as_i64()).map(|x| x as i32);
+                let uptime   = v.get("uptime").and_then(|x| x.as_u64()).unwrap_or(0);
+                let tx_bytes = v.get("tx_bytes").and_then(|x| x.as_u64()).unwrap_or(0);
+                let rx_bytes = v.get("rx_bytes").and_then(|x| x.as_u64()).unwrap_or(0);
+                let blocked  = v.get("blocked").and_then(|x| x.as_bool()).unwrap_or(false);
+                let last_seen = v.get("last_seen").and_then(|x| x.as_u64());
+
+                NetworkClient {
+                    mac, ip, hostname, display_name, oui, is_wired, network,
+                    essid, ap_mac, sw_mac, sw_port, poe_enabled, signal, uptime, tx_bytes,
+                    rx_bytes, blocked, last_seen,
+                }
+            }).collect();
+            return Ok(clients);
+        }
+        bail!("get_network_clients failed after retry")
+    }
+
     pub async fn get_all_clients(&mut self) -> Result<Vec<serde_json::Value>> {
         for attempt in 0u8..2 {
             self.ensure_logged_in().await?;
@@ -355,6 +522,7 @@ impl UnifiClient {
         bail!("get_all_clients failed after retry")
     }
 
+    #[allow(dead_code)]
     pub async fn get_switch_ports(&mut self, switch_mac: &str) -> Result<Vec<RawPort>> {
         for attempt in 0u8..2 {
             self.ensure_logged_in().await?;

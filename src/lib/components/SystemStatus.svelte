@@ -72,23 +72,23 @@
         </div>
         <div class="info-row">
           <span class="label">Download:</span>
-          <span class="value">{(net.downloadSpeed ?? 0).toFixed(2)} Mbps</span>
-        </div>
-        <div class="info-row">
-          <span class="label">Upload:</span>
-          <span class="value">{(net.uploadSpeed ?? 0).toFixed(2)} Mbps</span>
-        </div>
-        <div class="info-row">
-          <span class="label">Current DL:</span>
           <span class="value">{((net.downloadBitrate ?? 0) / 1_000_000).toFixed(2)} Mbps</span>
         </div>
         <div class="info-row">
-          <span class="label">Current UL:</span>
+          <span class="label">Upload:</span>
           <span class="value">{((net.uploadBitrate ?? 0) / 1_000_000).toFixed(2)} Mbps</span>
         </div>
         <div class="info-row">
+          <span class="label">DL Capacity:</span>
+          <span class="value">{net.downloadCapacity != null ? `${net.downloadCapacity.toFixed(1)} Mbps` : 'N/A'}</span>
+        </div>
+        <div class="info-row">
+          <span class="label">UL Capacity:</span>
+          <span class="value">{net.uploadCapacity != null ? `${net.uploadCapacity.toFixed(1)} Mbps` : 'N/A'}</span>
+        </div>
+        <div class="info-row">
           <span class="label">Latency:</span>
-          <span class="value">{net.latency ?? 0} ms</span>
+          <span class="value">{net.latency != null ? `${net.latency} ms` : 'N/A'}</span>
         </div>
       {/if}
     </div>

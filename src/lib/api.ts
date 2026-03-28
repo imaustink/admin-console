@@ -5,6 +5,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import type {
   UnifiDevice,
+  NetworkClient,
   InternetStats,
   K8sNode,
   K8sHealthCheckConfig,
@@ -19,8 +20,11 @@ export const api = {
   unifi: {
     getDevices: () => invoke<UnifiDevice[]>('unifi_get_devices'),
     getInternetStats: () => invoke<InternetStats>('unifi_get_internet_stats'),
+    getClients: () => invoke<NetworkClient[]>('unifi_get_clients'),
     powerCycle: (deviceId: string) => invoke<void>('unifi_power_cycle', { deviceId }),
     updateFirmware: (deviceId: string) => invoke<void>('unifi_update_firmware', { deviceId }),
+    powerCycleClientPort: (swMac: string, portIdx: number) =>
+      invoke<void>('unifi_power_cycle_client_port', { swMac, portIdx }),
   },
 
   // ─── Kubernetes ──────────────────────────────────────────────────────────────

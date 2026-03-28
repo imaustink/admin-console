@@ -25,11 +25,42 @@ pub struct UnifiDevice {
 pub struct InternetStats {
     pub uptime: u64,
     pub uptime_percentage: f64,
-    pub download_speed: f64,
-    pub upload_speed: f64,
     pub download_bitrate: u64,
     pub upload_bitrate: u64,
-    pub latency: u32,
+    pub latency: Option<u32>,
+    pub download_capacity: Option<f64>,
+    pub upload_capacity: Option<f64>,
+}
+
+// ─── Network Client Types ─────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NetworkClient {
+    pub mac: String,
+    pub ip: Option<String>,
+    pub hostname: Option<String>,
+    pub display_name: Option<String>,
+    pub oui: Option<String>,
+    pub is_wired: bool,
+    pub network: Option<String>,
+    /// SSID the client is connected to (wireless only)
+    pub essid: Option<String>,
+    /// AP MAC the client is connected to (wireless only)
+    pub ap_mac: Option<String>,
+    /// Switch MAC the client is connected to (wired only)
+    pub sw_mac: Option<String>,
+    /// Switch port (wired only)
+    pub sw_port: Option<u32>,
+    /// Whether the switch port powering this client has PoE enabled
+    pub poe_enabled: bool,
+    /// Signal strength in dBm (wireless only)
+    pub signal: Option<i32>,
+    pub uptime: u64,
+    pub tx_bytes: u64,
+    pub rx_bytes: u64,
+    pub blocked: bool,
+    pub last_seen: Option<u64>,
 }
 
 // ─── Kubernetes Types ─────────────────────────────────────────────────────────
@@ -174,6 +205,7 @@ pub struct KubernetesConfig {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[allow(dead_code)]
 pub struct HealthCheckConfig {
     pub name: String,
     pub url: String,

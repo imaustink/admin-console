@@ -1,17 +1,17 @@
 [Unit]
 Description=Homelab Dashboard - UniFi and Kubernetes Management
 Documentation=https://github.com/imaustink/admin-console
-After=network.target graphical-session.target
+After=network.target graphical.target
 
 [Service]
 Type=simple
-User=admin
-Group=admin
+User=pi
+Group=pi
 WorkingDirectory=/opt/homelab-dashboard
 
 # Display (required for Tauri/WebKit)
 Environment="DISPLAY=:0"
-Environment="XAUTHORITY=/home/admin/.Xauthority"
+Environment="XAUTHORITY=/home/pi/.Xauthority"
 
 # Disable problematic WebKit GPU rendering on Raspberry Pi
 Environment="WEBKIT_DISABLE_DMABUF_RENDERER=1"
@@ -20,7 +20,7 @@ Environment="WEBKIT_DISABLE_COMPOSITING_MODE=1"
 # Config path
 Environment="CONFIG_PATH=/etc/homelab-dashboard/config.json"
 
-ExecStart=/opt/homelab-dashboard/homelab-dashboard.AppImage --no-sandbox
+ExecStart=/opt/homelab-dashboard/squashfs-root/AppRun --no-sandbox
 
 Restart=always
 RestartSec=10
@@ -34,4 +34,4 @@ StandardError=journal
 SyslogIdentifier=homelab-dashboard
 
 [Install]
-WantedBy=graphical-session.target
+WantedBy=graphical.target

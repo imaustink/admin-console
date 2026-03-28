@@ -7,7 +7,7 @@ set -e
 cd "$(dirname "$0")"
 
 SSH_HOST="console"
-REMOTE_USER="admin"
+REMOTE_USER="pi"
 REMOTE_APP_DIR="/opt/homelab-dashboard"
 REMOTE_CONFIG_DIR="/etc/homelab-dashboard"
 SERVICE_NAME="homelab-dashboard"
@@ -16,8 +16,13 @@ GREEN='\033[0;32m'; BLUE='\033[0;34m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; NC
 
 echo "Deploying Homelab Dashboard to Raspberry Pi..."
 
-# Find the AppImage produced by build-rpi.sh
-APPIMAGE=$(find src-tauri/target/aarch64-unknown-linux-gnu/release/bundle/appimage -name "*.AppImage" ! -name "*.tar.gz" 2>/dev/null | head -1)
+# Find the AppImage produced by build-rpi.sh (Docker builds land in target-linux/,
+# cross-compiled Linux builds land in target/aarch64-unknown-linux-gnu/release/)
+APPIMAGE=$(find \
+    src-tauri/target-linux/release/bundle/appimage \
+    src-tauri/target/aarch64-unknown-linux-gnu/release/bundle/appimage \
+    src-tauri/target/release/bundle/appimage \
+    -name "*.AppImage" ! -name "*.tar.gz" 2>/dev/null | head -1)
 if [ -z "$APPIMAGE" ]; then
     echo -e "${RED}ERROR: AppImage not found. Run ./build-rpi.sh first.${NC}"
     exit 1
@@ -43,6 +48,10 @@ ssh "$SSH_HOST" "sudo mkdir -p $REMOTE_APP_DIR && sudo chown $REMOTE_USER:$REMOT
 echo -e "${BLUE}Uploading AppImage...${NC}"
 scp "$APPIMAGE" "$SSH_HOST:$REMOTE_APP_DIR/homelab-dashboard.AppImage"
 ssh "$SSH_HOST" "chmod +x $REMOTE_APP_DIR/homelab-dashboard.AppImage"
+
+# Extract AppImage (avoids FUSE requirement when running under systemd)
+echo -e "${BLUE}Extracting AppImage (skips FUSE requirement under systemd)...${NC}"
+ssh "$SSH_HOST" "cd $REMOTE_APP_DIR && rm -rf squashfs-root && ./homelab-dashboard.AppImage --appimage-extract && echo 'Extracted OK'"
 
 # Config
 echo -e "${BLUE}Setting up configuration directory...${NC}"

@@ -14,14 +14,35 @@ export interface UnifiDevice {
   upgradeToFirmware?: string;
 }
 
+export interface NetworkClient {
+  mac: string;
+  ip?: string;
+  hostname?: string;
+  displayName?: string;
+  oui?: string;
+  isWired: boolean;
+  network?: string;
+  essid?: string;
+  apMac?: string;
+  swMac?: string;
+  swPort?: number;
+  poeEnabled: boolean;
+  signal?: number;
+  uptime: number;
+  txBytes: number;
+  rxBytes: number;
+  blocked: boolean;
+  lastSeen?: number;
+}
+
 export interface InternetStats {
   uptime: number;
   uptimePercentage: number;
-  downloadSpeed: number;
-  uploadSpeed: number;
   downloadBitrate: number;
   uploadBitrate: number;
-  latency: number;
+  latency?: number;
+  downloadCapacity?: number;
+  uploadCapacity?: number;
 }
 
 export interface K8sNode {

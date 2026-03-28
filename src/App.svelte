@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import UnifiDevices from './lib/components/UnifiDevices.svelte';
+  import UnifiClients from './lib/components/UnifiClients.svelte';
   import K8sNodes from './lib/components/K8sNodes.svelte';
   import SystemStatus from './lib/components/SystemStatus.svelte';
   import UpdateModal from './lib/components/modals/UpdateModal.svelte';
@@ -13,9 +14,7 @@
   }
 
   async function handleExit() {
-    if (confirm('Are you sure you want to exit?')) {
-      await api.app.exit();
-    }
+    await api.app.exit();
   }
 
   // ─── Update handling ─────────────────────────────────────────────────────────
@@ -51,6 +50,14 @@
       </button>
       <button
         class="tab-button"
+        class:active={activeTab === 'clients'}
+        on:click={() => setTab('clients')}
+        on:touchstart|preventDefault={() => setTab('clients')}
+      >
+        Clients
+      </button>
+      <button
+        class="tab-button"
         class:active={activeTab === 'k8s'}
         on:click={() => setTab('k8s')}
         on:touchstart|preventDefault={() => setTab('k8s')}
@@ -72,6 +79,8 @@
   <main>
     {#if activeTab === 'unifi'}
       <UnifiDevices />
+    {:else if activeTab === 'clients'}
+      <UnifiClients />
     {:else if activeTab === 'k8s'}
       <K8sNodes />
     {:else if activeTab === 'status'}

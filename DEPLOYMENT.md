@@ -4,7 +4,13 @@ How to build and deploy the Homelab Dashboard (Tauri AppImage) to a Raspberry Pi
 
 ## Prerequisites
 
-### Development Machine
+### Development Machine (macOS Apple Silicon)
+- Node.js 20+ and npm
+- Docker Desktop (used to build in a native ARM64 Linux container — no QEMU)
+- Signing key at `~/.tauri/homelab-dashboard.key` (generated once — see below)
+- SSH config with a host named `console` pointing to the Pi
+
+### Development Machine (Linux)
 - Node.js 20+ and npm
 - Rust (via `rustup`) with the `aarch64-unknown-linux-gnu` target
 - `gcc-aarch64-linux-gnu` cross-linker (`sudo apt-get install gcc-aarch64-linux-gnu`)
@@ -32,10 +38,11 @@ cat ~/.tauri/homelab-dashboard.key
 # Copy the output → GitHub repo → Settings → Secrets → New repository secret
 ```
 
-### 2. Add Rust ARM64 target
+### 2. Add Rust ARM64 target (Linux only)
 ```bash
 rustup target add aarch64-unknown-linux-gnu
 ```
+(On macOS, this is handled automatically inside the Docker build container.)
 
 ### 3. Create `config.json`
 Copy `config.example.json` to `config.json` and fill in your credentials.
@@ -44,10 +51,17 @@ Copy `config.example.json` to `config.json` and fill in your credentials.
 
 ## Building
 
-### Cross-compile for Raspberry Pi
+### Build for Raspberry Pi
 ```bash
 ./build-rpi.sh
 ```
+
+**macOS (Apple Silicon):** Builds inside a Linux ARM64 Docker container (`Dockerfile.rpi`). Docker runs ARM64 natively on Apple Silicon — no QEMU needed. First run builds the image (~5 min); subsequent runs reuse the cached image and Rust build cache.
+
+Output AppImage: `src-tauri/target-linux/release/bundle/appimage/`
+
+**Linux:** Uses `gcc-aarch64-linux-gnu` cross-compiler directly.
+
 Output AppImage: `src-tauri/target/aarch64-unknown-linux-gnu/release/bundle/appimage/`
 
 ### Local development (native)
@@ -65,17 +79,19 @@ npm run tauri:mock      # mock data (no Pi needed)
 ```
 
 This will:
-1. Upload the AppImage to `/opt/homelab-dashboard/` on the Pi
-2. Upload `config.json` (only if one doesn't already exist on the Pi)
-3. Install `homelab-dashboard.service` as a systemd service
-4. Enable and start the service
+1. Find the AppImage produced by `build-rpi.sh`
+2. Upload the AppImage to `/opt/homelab-dashboard/` on the Pi
+3. Extract the AppImage (avoids FUSE mount requirement under systemd)
+4. Upload `config.json` (only if one doesn't already exist on the Pi)
+5. Install `homelab-dashboard.service` as a systemd service
+6. Enable and start the service
 
 ### SSH config requirement
 `~/.ssh/config` must have a `console` entry:
 ```
 Host console
     HostName 192.168.1.x
-    User admin
+    User pi
     IdentityFile ~/.ssh/id_rsa
 ```
 

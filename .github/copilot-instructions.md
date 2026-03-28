@@ -54,6 +54,11 @@ src-tauri/                 # Rust backend (Tauri)
         ├── unifi.rs       # UniFi HTTP client (reqwest + cookie auth)
         ├── k8s.rs         # K8s REST API client + SSH via tokio::process
         └── port_mapper.rs # Maps K8s nodes to UniFi switch ports
+
+Dockerfile.rpi             # ARM64 Linux build environment (used by build-rpi.sh on macOS)
+build-rpi.sh               # Builds ARM64 AppImage (Docker on macOS, apt cross-compiler on Linux)
+deploy-rpi.sh              # Deploys AppImage to Pi via SSH host alias "console"
+homelab-dashboard.service  # systemd unit file
 ```
 
 ## Key Architectural Patterns
@@ -314,7 +319,11 @@ std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
 
 The app targets Raspberry Pi 4 (aarch64):
 - See `DEPLOYMENT.md` for full deployment instructions
-- Use `build-rpi.sh` for ARM64 cross-compilation
-- Use `deploy-rpi.sh` for remote deployment via SSH (`console` host alias)
+- Use `build-rpi.sh` to build the ARM64 AppImage:
+  - **macOS (Apple Silicon)**: builds inside `Dockerfile.rpi` (Ubuntu 22.04 ARM64 container). Docker runs ARM64 natively on Apple Silicon — no QEMU. Output: `src-tauri/target-linux/release/bundle/appimage/`
+  - **Linux**: uses `gcc-aarch64-linux-gnu` cross-compiler. Output: `src-tauri/target/aarch64-unknown-linux-gnu/release/bundle/appimage/`
+- Use `deploy-rpi.sh` for remote deployment via SSH (`console` host alias, user `pi`)
+- `deploy-rpi.sh` extracts the AppImage on the Pi (`--appimage-extract`) so that systemd can run it without FUSE (which is blocked by `NoNewPrivileges=true`). The service runs `squashfs-root/AppRun` directly.
 - Config file: place `config.json` in the project root for dev, or `/etc/homelab-dashboard/config.json` on the device
+- Signing key: `~/.tauri/homelab-dashboard.key` (never commit — excluded by `.gitignore`). Regenerate with `npx tauri signer generate -w ~/.tauri/homelab-dashboard.key`, then update `plugins.updater.pubkey` in `src-tauri/tauri.conf.json`.
 - Releases: run `./bump-version.sh patch` to tag; GitHub Actions builds and publishes signed AppImage automatically
