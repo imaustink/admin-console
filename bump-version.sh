@@ -25,7 +25,7 @@ TAG="v${NEW_VERSION}"
 echo "Bumping to ${TAG}..."
 
 # Sync Cargo.toml
-sed -i "s/^version = \".*\"/version = \"${NEW_VERSION}\"/" src-tauri/Cargo.toml
+sed -i '' "s/^version = \".*\"/version = \"${NEW_VERSION}\"/" src-tauri/Cargo.toml
 
 # Sync tauri.conf.json
 python3 -c "
