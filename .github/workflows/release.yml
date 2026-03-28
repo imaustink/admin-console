@@ -56,21 +56,84 @@ jobs:
           PKG_CONFIG_ALLOW_CROSS: "1"
         run: npm run tauri:build:rpi
 
+      - name: Upload RPi artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: rpi-artifacts
+          path: |
+            src-tauri/target/aarch64-unknown-linux-gnu/release/bundle/appimage/*.AppImage.tar.gz
+            src-tauri/target/aarch64-unknown-linux-gnu/release/bundle/appimage/*.AppImage.tar.gz.sig
+
+  build-macos:
+    name: Build macOS (Universal)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Build Tauri app (macOS Universal)
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: npm run tauri build -- --target universal-apple-darwin
+
+      - name: Upload macOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-artifacts
+          path: |
+            src-tauri/target/universal-apple-darwin/release/bundle/macos/*.app.tar.gz
+            src-tauri/target/universal-apple-darwin/release/bundle/macos/*.app.tar.gz.sig
+
+  create-release:
+    name: Create GitHub Release
+    needs: [build-rpi, build-macos]
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download RPi artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: rpi-artifacts
+          path: artifacts/rpi
+
+      - name: Download macOS artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: macos-artifacts
+          path: artifacts/macos
+
       - name: Get version
         id: version
         run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
 
-      - name: Collect artifacts and build latest.json
-        id: artifacts
+      - name: Build latest.json
         env:
           VERSION: ${{ steps.version.outputs.version }}
           REPO: ${{ github.repository }}
         run: |
-          APPIMAGE_DIR="src-tauri/target/aarch64-unknown-linux-gnu/release/bundle/appimage"
-          TARBALL=$(find "$APPIMAGE_DIR" -name "*.AppImage.tar.gz" | head -1)
-          SIG="${TARBALL}.sig"
-          FILENAME=$(basename "$TARBALL")
-          SIGNATURE=$(cat "$SIG")
+          RPI_TARBALL=$(find artifacts/rpi -name "*.AppImage.tar.gz" | head -1)
+          RPI_SIG=$(find artifacts/rpi -name "*.AppImage.tar.gz.sig" | head -1)
+          RPI_FILENAME=$(basename "$RPI_TARBALL")
+          RPI_SIGNATURE=$(cat "$RPI_SIG")
+
+          MAC_TARBALL=$(find artifacts/macos -name "*.app.tar.gz" | head -1)
+          MAC_SIG=$(find artifacts/macos -name "*.app.tar.gz.sig" | head -1)
+          MAC_FILENAME=$(basename "$MAC_TARBALL")
+          MAC_SIGNATURE=$(cat "$MAC_SIG")
 
           cat > latest.json <<JSON
           {
@@ -79,26 +142,31 @@ jobs:
             "pub_date": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
             "platforms": {
               "linux-aarch64": {
-                "url": "https://github.com/$REPO/releases/download/v$VERSION/$FILENAME",
-                "signature": "$SIGNATURE"
+                "url": "https://github.com/$REPO/releases/download/v$VERSION/$RPI_FILENAME",
+                "signature": "$RPI_SIGNATURE"
+              },
+              "darwin-x86_64": {
+                "url": "https://github.com/$REPO/releases/download/v$VERSION/$MAC_FILENAME",
+                "signature": "$MAC_SIGNATURE"
+              },
+              "darwin-aarch64": {
+                "url": "https://github.com/$REPO/releases/download/v$VERSION/$MAC_FILENAME",
+                "signature": "$MAC_SIGNATURE"
               }
             }
           }
           JSON
 
-          echo "tarball=$TARBALL" >> "$GITHUB_OUTPUT"
-          echo "sig=$SIG" >> "$GITHUB_OUTPUT"
-
       - name: Create GitHub Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ steps.version.outputs.version }}
-          TARBALL: ${{ steps.artifacts.outputs.tarball }}
-          SIG: ${{ steps.artifacts.outputs.sig }}
         run: |
           gh release create "v$VERSION" \
             --title "v$VERSION" \
             --generate-notes \
-            "$TARBALL" \
-            "$SIG" \
+            artifacts/rpi/*.AppImage.tar.gz \
+            artifacts/rpi/*.AppImage.tar.gz.sig \
+            artifacts/macos/*.app.tar.gz \
+            artifacts/macos/*.app.tar.gz.sig \
             latest.json
