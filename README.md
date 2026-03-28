@@ -1,135 +1,126 @@
 # Homelab Dashboard
 
-An Electron-based dashboard for managing your homelab infrastructure, including UniFi devices, Kubernetes clusters, and system health monitoring.
+A [Tauri 2](https://tauri.app) + [Svelte](https://svelte.dev) desktop dashboard for managing homelab infrastructure: UniFi network devices, Kubernetes clusters, and system health monitoring.
 
 ## Features
 
-- **UniFi Controller Integration**: View and manage UniFi network devices
-  - Device status and information
-  - Power cycling
-  - Firmware updates
-  
-- **Kubernetes Management**: Monitor and control K8s cluster nodes
-  - Node status and health
-  - Drain/cordon/uncordon operations
-  - Resource health checks
-  - Port mapping management
+- **UniFi Controller Integration** — device status, power cycling, firmware updates
+- **Kubernetes Management** — node health, drain/cordon/uncordon, resource checks, port mapping
+- **System Status** — internet stats, HTTP endpoint health checks
+- **Auto-Updates** — signed releases via GitHub, prompted on startup
 
-- **System Status**: Centralized health monitoring
-  - Internet connectivity stats
-  - HTTP endpoint health checks
-  - Resource availability monitoring
+## Tech Stack
 
-## Prerequisites
+- **Frontend**: Svelte 4 + TypeScript + Vite 5
+- **Backend**: Rust (Tauri 2) — all HTTP, SSH, and business logic
+- **Target Platform**: Raspberry Pi 4/5 (aarch64)
 
-- Node.js 18+ and npm
-- Access to UniFi Controller
-- Kubernetes cluster with kubectl configured (optional)
+## Quick Start
 
-## Installation
+### Prerequisites
+- Node.js 20+ and npm
+- Rust via [rustup](https://rustup.rs)
 
-1. Clone the repository
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
+### Setup
 
-3. Copy the example config and fill in your details:
-   ```bash
-   cp config.example.json config.json
-   ```
+```bash
+# Install dependencies
+npm install
 
-4. Edit `config.json` with your UniFi controller credentials
+# Copy and edit config
+cp config.example.json config.json
+```
+
+See `config.example.json` for the full schema including UniFi, Kubernetes, and health check configuration.
+
+### Running
+
+```bash
+# Development (real data — requires config.json)
+npm run tauri:dev
+
+# Development with mock data (no infrastructure needed)
+npm run tauri:mock
+
+# Production build (native)
+npm run tauri:build
+```
 
 ## Configuration
 
-Edit `config.json`:
+`config.json` (excluded from git):
 
 ```json
 {
   "unifi": {
-    "host": "unifi.local",
+    "host": "192.168.1.1",
     "port": 8443,
     "username": "admin",
-    "password": "your-password-here",
+    "password": "...",
     "site": "default"
   },
   "kubernetes": {
     "cluster": "https://192.168.1.100:6443",
-    "token": "your-service-account-token",
-    "skipTLSVerify": false
-  }
+    "token": "...",
+    "skipTLSVerify": true,
+    "ssh": {
+      "username": "ubuntu",
+      "password": "...",
+      "port": 22
+    }
+  },
+  "healthChecks": [
+    { "name": "Home Assistant", "url": "http://192.168.1.x:8123", "expectedStatus": 200 }
+  ]
 }
 ```
 
-### Kubernetes Authentication
+For Kubernetes token setup, see [K8S_TOKEN_SETUP.md](K8S_TOKEN_SETUP.md).
 
-The dashboard supports two authentication methods:
+## Deployment to Raspberry Pi
 
-1. **Service Account Token** (recommended): See [K8S_TOKEN_SETUP.md](K8S_TOKEN_SETUP.md) for instructions
-2. **Kubeconfig**: Omit the `kubernetes` section to use default kubeconfig
+See [DEPLOYMENT.md](DEPLOYMENT.md) for full instructions, including:
+- Cross-compiling for ARM64
+- Deploying via `./deploy-rpi.sh`
+- Running as a systemd service
+- Setting up signed auto-updates via GitHub Releases
 
-## Deployment
+## Releasing
 
-See [DEPLOYMENT.md](DEPLOYMENT.md) for instructions on deploying to a Raspberry Pi.
-
-## Auto-Updates
-
-The application supports automatic updates via GitHub Releases. Users will be notified when a new version is available and can update with a single click.
-
-See [AUTO_UPDATE_SETUP.md](AUTO_UPDATE_SETUP.md) for:
-- Setting up GitHub Releases
-- Publishing updates
-- Code signing requirements
-- Testing auto-updates
-
-## Running the Application
-
-### Development Mode
 ```bash
-npm run dev
+./bump-version.sh patch   # or: minor, major, 2.2.0
 ```
 
-### Production Build
-```bash
-npm run build
-npm start
-```
+Bumps the version across `package.json`, `Cargo.toml`, and `tauri.conf.json`, then commits, tags, and pushes. GitHub Actions builds and publishes the signed release automatically.
 
-### Test Mode (with mock data)
-```bash
-npm run test-mode
-```
-
-## Development
-
-The application is built with:
-- **Electron**: Desktop application framework
-- **TypeScript**: Type-safe JavaScript
-- **Winston**: Logging framework
-
-### Project Structure
+## Project Structure
 
 ```
-src/
-  ├── main.ts           # Electron main process
-  ├── preload.ts        # Preload script for context bridge
-  ├── renderer.ts       # Renderer process logic
-  ├── types.ts          # TypeScript type definitions
-  ├── controllers/      # Business logic controllers
-  │   ├── unifi.ts
-  │   ├── k8s.ts
-  │   ├── status.ts
-  │   ├── port-mapper.ts
-  │   └── mock/         # Mock controllers for testing
-  ├── fixtures/         # Test data fixtures
-  └── utils/            # Utility functions
-      └── logger.ts
+src/                        # Svelte frontend
+├── App.svelte
+├── app.css
+├── main.ts
+└── lib/
+    ├── api.ts              # Tauri invoke() wrappers
+    ├── types.ts            # Shared TypeScript types
+    └── components/
+        ├── UnifiDevices.svelte
+        ├── K8sNodes.svelte
+        ├── SystemStatus.svelte
+        └── modals/
+
+src-tauri/                  # Rust backend
+└── src/
+    ├── lib.rs              # Tauri commands
+    ├── config.rs           # Config loading
+    ├── types.rs            # Rust types
+    ├── state.rs            # Shared app state
+    ├── mock.rs             # Mock data (MOCK_MODE=1)
+    └── controllers/
+        ├── unifi.rs        # UniFi HTTP client
+        ├── k8s.rs          # Kubernetes REST + SSH
+        └── port_mapper.rs
 ```
-
-## Logs
-
-Application logs are written to the `logs/` directory with timestamps. Each application run creates a new log file.
 
 ## License
 

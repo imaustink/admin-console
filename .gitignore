@@ -5,4 +5,11 @@ build/
 .env
 config.json
 cache/
+# Rust / Tauri build artifacts
+src-tauri/target/
+src-tauri/gen/
+# Tauri signing keys (keep private key out of repo)
+*.key
 logs/
+# Docker ARM64 build output (macOS builds via Dockerfile.rpi)
+src-tauri/target-linux/
