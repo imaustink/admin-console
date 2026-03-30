@@ -20,6 +20,11 @@ jobs:
           node-version: '20'
           cache: 'npm'
 
+      - name: Set up QEMU (arm64 binfmt for AppImage bundler)
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
         with:
