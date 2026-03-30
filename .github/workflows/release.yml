@@ -12,6 +12,7 @@ jobs:
   build-rpi:
     name: Build Raspberry Pi (Linux ARM64)
     runs-on: ubuntu-22.04
+    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
 
@@ -69,6 +70,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: macos-artifacts
+          if-no-files-found: warn
           path: |
             src-tauri/target/universal-apple-darwin/release/bundle/macos/*.app.tar.gz
             src-tauri/target/universal-apple-darwin/release/bundle/macos/*.app.tar.gz.sig
@@ -76,17 +78,20 @@ jobs:
   create-release:
     name: Create GitHub Release
     needs: [build-rpi, build-macos]
+    if: ${{ always() && needs.build-macos.result == 'success' }}
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
 
       - name: Download RPi artifacts
+        if: ${{ needs.build-rpi.result == 'success' }}
         uses: actions/download-artifact@v4
         with:
           name: rpi-artifacts
           path: artifacts/rpi
 
       - name: Download macOS artifacts
+        continue-on-error: true
         uses: actions/download-artifact@v4
         with:
           name: macos-artifacts
@@ -101,48 +106,50 @@ jobs:
           VERSION: ${{ steps.version.outputs.version }}
           REPO: ${{ github.repository }}
         run: |
-          RPI_TARBALL=$(find artifacts/rpi -name "*.AppImage.tar.gz" | head -1)
-          RPI_SIG=$(find artifacts/rpi -name "*.AppImage.tar.gz.sig" | head -1)
-          RPI_FILENAME=$(basename "$RPI_TARBALL")
-          RPI_SIGNATURE=$(cat "$RPI_SIG")
+          python3 - <<'PYEOF'
+          import os, json
+          from pathlib import Path
+          from datetime import datetime, timezone
 
-          MAC_TARBALL=$(find artifacts/macos -name "*.app.tar.gz" | head -1)
-          MAC_SIG=$(find artifacts/macos -name "*.app.tar.gz.sig" | head -1)
-          MAC_FILENAME=$(basename "$MAC_TARBALL")
-          MAC_SIGNATURE=$(cat "$MAC_SIG")
+          version = os.environ['VERSION']
+          repo = os.environ['REPO']
+          platforms = {}
 
-          cat > latest.json <<JSON
-          {
-            "version": "$VERSION",
-            "notes": "See the release notes on GitHub.",
-            "pub_date": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-            "platforms": {
-              "linux-aarch64": {
-                "url": "https://github.com/$REPO/releases/download/v$VERSION/$RPI_FILENAME",
-                "signature": "$RPI_SIGNATURE"
-              },
-              "darwin-x86_64": {
-                "url": "https://github.com/$REPO/releases/download/v$VERSION/$MAC_FILENAME",
-                "signature": "$MAC_SIGNATURE"
-              },
-              "darwin-aarch64": {
-                "url": "https://github.com/$REPO/releases/download/v$VERSION/$MAC_FILENAME",
-                "signature": "$MAC_SIGNATURE"
-              }
-            }
+          rpi = sorted(Path('artifacts/rpi').glob('*.AppImage.tar.gz')) if Path('artifacts/rpi').exists() else []
+          if rpi:
+              sig = Path(str(rpi[0]) + '.sig')
+              if sig.exists():
+                  platforms['linux-aarch64'] = {
+                      'url': f'https://github.com/{repo}/releases/download/v{version}/{rpi[0].name}',
+                      'signature': sig.read_text().strip()
+                  }
+
+          mac = sorted(Path('artifacts/macos').glob('*.app.tar.gz')) if Path('artifacts/macos').exists() else []
+          if mac:
+              sig = Path(str(mac[0]) + '.sig')
+              if sig.exists():
+                  url = f'https://github.com/{repo}/releases/download/v{version}/{mac[0].name}'
+                  signature = sig.read_text().strip()
+                  platforms['darwin-x86_64'] = {'url': url, 'signature': signature}
+                  platforms['darwin-aarch64'] = {'url': url, 'signature': signature}
+
+          data = {
+              'version': version,
+              'notes': 'See the release notes on GitHub.',
+              'pub_date': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),
+              'platforms': platforms
           }
-          JSON
+          Path('latest.json').write_text(json.dumps(data, indent=2))
+          PYEOF
 
       - name: Create GitHub Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ steps.version.outputs.version }}
         run: |
+          mapfile -t RELEASE_FILES < <(find artifacts -type f | sort)
           gh release create "v$VERSION" \
             --title "v$VERSION" \
             --generate-notes \
-            artifacts/rpi/*.AppImage.tar.gz \
-            artifacts/rpi/*.AppImage.tar.gz.sig \
-            artifacts/macos/*.app.tar.gz \
-            artifacts/macos/*.app.tar.gz.sig \
+            "${RELEASE_FILES[@]}" \
             latest.json

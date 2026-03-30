@@ -45,7 +45,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDM4NDEzRkU0RDcwNTk3OEQKUldTTmx3WFg1RDlCT0VLZ0krcFJHS2RLbVBVWEkyMGVnS0svSnRrS2dBOTRlemliaDFMc0R3UWQK",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDUwNEYxM0VFMEU4OTZFRkMKUldUOGJva083aE5QVURVdUpjSkNVaTZZRHkybjdUeWEvK1piTDU4a0hMeTBtbXlRRDc4K09BV0QK",
       "endpoints": [
         "https://github.com/imaustink/admin-console/releases/latest/download/latest.json"
       ]
