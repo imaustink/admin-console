@@ -28,26 +28,25 @@ jobs:
       - name: Install cross-compilation dependencies
         run: |
           sudo dpkg --add-architecture arm64
-          # Replace Ubuntu sources to pin amd64 and add arm64 from ports.ubuntu.com.
-          # The GHA runner's sources (including security.ubuntu.com) don't serve arm64
-          # packages, causing 404s. Overwrite sources.list with explicit arch pins and
-          # add arm64-only entries pointing at ports.ubuntu.com.
-          sudo tee /etc/apt/sources.list > /dev/null << 'EOF'
-          deb [arch=amd64] http://archive.ubuntu.com/ubuntu/ jammy main restricted universe multiverse
-          deb [arch=amd64] http://archive.ubuntu.com/ubuntu/ jammy-updates main restricted universe multiverse
-          deb [arch=amd64] http://archive.ubuntu.com/ubuntu/ jammy-backports main restricted universe multiverse
-          deb [arch=amd64] http://security.ubuntu.com/ubuntu/ jammy-security main restricted universe multiverse
-          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports jammy main restricted universe multiverse
-          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports jammy-updates main restricted universe multiverse
-          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports jammy-backports main restricted universe multiverse
-          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports jammy-security main restricted universe multiverse
-          EOF
-          # Also pin any extra Ubuntu source files added by the runner
+          # Overwrite sources.list with arch-pinned entries: amd64 from archive/security,
+          # arm64 from ports.ubuntu.com. Using printf|tee avoids heredoc indentation issues
+          # that occur in YAML multiline blocks where the EOF terminator has leading spaces.
+          printf '%s\n' \
+            'deb [arch=amd64] http://archive.ubuntu.com/ubuntu/ jammy main restricted universe multiverse' \
+            'deb [arch=amd64] http://archive.ubuntu.com/ubuntu/ jammy-updates main restricted universe multiverse' \
+            'deb [arch=amd64] http://archive.ubuntu.com/ubuntu/ jammy-backports main restricted universe multiverse' \
+            'deb [arch=amd64] http://security.ubuntu.com/ubuntu/ jammy-security main restricted universe multiverse' \
+            'deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports jammy main restricted universe multiverse' \
+            'deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports jammy-updates main restricted universe multiverse' \
+            'deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports jammy-backports main restricted universe multiverse' \
+            'deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports jammy-security main restricted universe multiverse' \
+            | sudo tee /etc/apt/sources.list > /dev/null
+          # Pin any extra ubuntu .list files in sources.list.d to amd64 (two separate seds
+          # to avoid using | as both delimiter and alternation operator, which breaks GHA sed)
           sudo find /etc/apt/sources.list.d -name '*.list' \
-            -exec sudo sed -i -E 's|^deb (https?://(archive|security)\.ubuntu\.com)|deb [arch=amd64] \1|' {} +
-          # Handle DEB822-format .sources files if present
-          sudo find /etc/apt/sources.list.d -name '*.sources' \
-            -exec sudo sed -i '/^Architectures:/d; /^Types: deb/a Architectures: amd64' {} +
+            -exec sudo sed -i 's|^deb http://security\.ubuntu\.com|deb [arch=amd64] http://security.ubuntu.com|g' {} + 2>/dev/null || true
+          sudo find /etc/apt/sources.list.d -name '*.list' \
+            -exec sudo sed -i 's|^deb http://archive\.ubuntu\.com|deb [arch=amd64] http://archive.ubuntu.com|g' {} + 2>/dev/null || true
           sudo apt-get update
           sudo apt-get install -y \
             gcc-aarch64-linux-gnu \
