@@ -28,17 +28,26 @@ jobs:
       - name: Install cross-compilation dependencies
         run: |
           sudo dpkg --add-architecture arm64
-          # Restrict all existing sources to amd64 so apt doesn't try security.ubuntu.com for arm64
-          sudo sed -i 's/^deb \[arch=/deb [arch=amd64,/g; s/^deb http/deb [arch=amd64] http/g' /etc/apt/sources.list
-          sudo find /etc/apt/sources.list.d -name '*.list' -exec \
-            sed -i 's/^deb \[arch=/deb [arch=amd64,/g; s/^deb http/deb [arch=amd64] http/g' {} +
-          # Add arm64-only sources from ports.ubuntu.com
-          sudo bash -c 'cat > /etc/apt/sources.list.d/arm64.list << LIST
+          # Replace Ubuntu sources to pin amd64 and add arm64 from ports.ubuntu.com.
+          # The GHA runner's sources (including security.ubuntu.com) don't serve arm64
+          # packages, causing 404s. Overwrite sources.list with explicit arch pins and
+          # add arm64-only entries pointing at ports.ubuntu.com.
+          sudo tee /etc/apt/sources.list > /dev/null << 'EOF'
+          deb [arch=amd64] http://archive.ubuntu.com/ubuntu/ jammy main restricted universe multiverse
+          deb [arch=amd64] http://archive.ubuntu.com/ubuntu/ jammy-updates main restricted universe multiverse
+          deb [arch=amd64] http://archive.ubuntu.com/ubuntu/ jammy-backports main restricted universe multiverse
+          deb [arch=amd64] http://security.ubuntu.com/ubuntu/ jammy-security main restricted universe multiverse
           deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports jammy main restricted universe multiverse
           deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports jammy-updates main restricted universe multiverse
           deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports jammy-backports main restricted universe multiverse
           deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports jammy-security main restricted universe multiverse
-          LIST'
+          EOF
+          # Also pin any extra Ubuntu source files added by the runner
+          sudo find /etc/apt/sources.list.d -name '*.list' \
+            -exec sudo sed -i -E 's|^deb (https?://(archive|security)\.ubuntu\.com)|deb [arch=amd64] \1|' {} +
+          # Handle DEB822-format .sources files if present
+          sudo find /etc/apt/sources.list.d -name '*.sources' \
+            -exec sudo sed -i '/^Architectures:/d; /^Types: deb/a Architectures: amd64' {} +
           sudo apt-get update
           sudo apt-get install -y \
             gcc-aarch64-linux-gnu \
