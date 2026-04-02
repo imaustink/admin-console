@@ -1,6 +1,6 @@
 [package]
 name = "homelab-dashboard"
-version = "3.5.4"
+version = "3.5.5"
 edition = "2021"
 description = "Unified dashboard for Kubernetes and UniFi management"
 license = "MIT"
