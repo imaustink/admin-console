@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import { api } from '../api';
   import type { K8sNode, NodePortMapping } from '../types';
   import CommandModal from './modals/CommandModal.svelte';
@@ -10,6 +10,7 @@
   let loading = true;
   let error = '';
   let openDropdown: string | null = null;
+  let dropUp = false;
 
   // Command modal state
   let showCommandModal = false;
@@ -38,8 +39,27 @@
     return portMappings.find((m) => m.nodeName === nodeName);
   }
 
-  function toggleDropdown(nodeName: string) {
-    openDropdown = openDropdown === nodeName ? null : nodeName;
+  async function toggleDropdown(nodeName: string, event: MouseEvent) {
+    if (openDropdown === nodeName) {
+      openDropdown = null;
+      return;
+    }
+    const btn = event.currentTarget as HTMLElement;
+    // Open downward first, then measure the real menu height and flip if it
+    // would overflow the bottom of the viewport.
+    dropUp = false;
+    openDropdown = nodeName;
+    await tick();
+    const menu = btn.parentElement?.querySelector('.dropdown-menu') as HTMLElement | null;
+    if (!menu) return;
+    const rect = btn.getBoundingClientRect();
+    const menuHeight = menu.getBoundingClientRect().height;
+    const margin = 8;
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const spaceAbove = rect.top;
+    if (spaceBelow < menuHeight + margin && spaceAbove > spaceBelow) {
+      dropUp = true;
+    }
   }
 
   function closeDropdown() {
@@ -136,7 +156,7 @@
 {:else if nodes.length === 0}
   <div class="empty">No nodes found</div>
 {:else}
-  <div class="device-grid">
+  <div class="device-grid" class:menu-open={openDropdown !== null}>
     {#each nodes as node (node.name)}
       {@const mapping = getMapping(node.name)}
       {@const hasPoe = mapping?.poeAvailable ?? false}
@@ -198,12 +218,12 @@
           <div class="dropdown" on:click|stopPropagation>
             <button
               class="dropdown-toggle"
-              on:click={() => toggleDropdown(node.name)}
+              on:click={(e) => toggleDropdown(node.name, e)}
             >
               Actions
             </button>
             {#if openDropdown === node.name}
-              <div class="dropdown-menu show">
+              <div class="dropdown-menu show" class:drop-up={dropUp}>
                 {#if node.schedulable}
                   <button class="dropdown-item warning" on:click={() => drainNode(node.name)}>
                     Drain Node

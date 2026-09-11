@@ -237,6 +237,12 @@ main {
   contain: layout style;
 }
 
+/* Allow an open Actions dropdown to overflow the grid instead of being clipped */
+.device-grid.menu-open {
+  overflow: visible;
+  contain: none;
+}
+
 .status-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -543,6 +549,14 @@ main {
 
 .dropdown-menu.show {
   display: block;
+}
+
+/* Open upward for cards near the bottom of the viewport */
+.dropdown-menu.drop-up {
+  top: auto;
+  bottom: 100%;
+  margin-top: 0;
+  margin-bottom: 2px;
 }
 
 .dropdown-item {
